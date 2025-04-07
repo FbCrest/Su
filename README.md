@@ -1,3 +1,5 @@
+# Project dùng cho cá nhân. tool của tác giả Ngân Linh. Source: https://github.com/nganlinh4/oneclick-subtitles-generator?tab=readme-ov-file
+
 # One-Click Subtitles Generator
 
 ## Screenshots
