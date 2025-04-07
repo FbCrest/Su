@@ -1,0 +1,13 @@
+/* SettingsModal.css */
+/* Main file that imports all modular CSS files */
+
+/* Import modular CSS files */
+@import './settings/base.css';
+@import './settings/header-footer.css';
+@import './settings/content-scrollbars.css';
+@import './settings/appearance.css';
+@import './settings/api-key.css';
+@import './settings/video-processing.css';
+@import './settings/cache.css';
+@import './settings/buttons.css';
+@import './settings/responsive.css';
