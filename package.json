@@ -2,7 +2,8 @@
   "name": "subtitles-generator",
   "version": "1.0.0",
   "description": "A subtitle generator application using Gemini AI",
-  "main": "index.js",
+  "main": "build/electron.js",
+  "homepage": "./",
   "scripts": {
     "start": "set PORT=3005 && react-scripts start",
     "build": "react-scripts build",
@@ -10,24 +11,47 @@
     "eject": "react-scripts eject",
     "server": "node server.js",
     "server:start": "node server.js",
-    "dev": "concurrently \"npm run start\" \"npm run server:start\""
+    "dev": "concurrently \"npm run start\" \"npm run server:start\"",
+    "electron:dev": "concurrently \"npm run start\" \"npm run server:start\" \"electron .\"",
+    "electron:build": "npm run build && electron-builder build --win --dir && electron-builder build --win",
+    "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
+    "@electron/remote": "^2.1.2",
+    "@react-oauth/google": "^0.12.1",
+    "assert": "^2.1.0",
+    "browserify-zlib": "^0.2.0",
+    "buffer": "^6.0.3",
     "cors": "^2.8.5",
+    "crypto-browserify": "^3.12.1",
     "express": "^4.18.2",
+    "googleapis": "^148.0.0",
+    "https-browserify": "^1.0.0",
     "i18next": "^23.8.0",
+    "os-browserify": "^0.3.0",
+    "path-browserify": "^1.0.1",
     "play-dl": "^1.9.7",
+    "process": "^0.11.10",
+    "querystring-es3": "^0.2.1",
     "react": "^18.2.0",
+    "react-app-rewired": "^2.2.1",
     "react-dom": "^18.2.0",
     "react-i18next": "^13.3.0",
     "react-icons": "^5.5.0",
+    "react-router-dom": "^6.22.3",
     "react-scripts": "5.0.1",
     "react-window": "^1.8.11",
+    "stream-browserify": "^3.0.0",
+    "stream-http": "^3.2.0",
+    "url": "^0.11.4",
+    "util": "^0.12.5",
     "web-vitals": "^3.5.0",
     "ytdl-core": "npm:@distube/ytdl-core@^4.16.8"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "electron": "^29.1.0",
+    "electron-builder": "^24.13.3"
   },
   "eslintConfig": {
     "extends": [
@@ -46,5 +70,61 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "build": {
+    "appId": "com.subtitles.generator",
+    "productName": "Subtitles Generator",
+    "files": [
+      "build/**/*",
+      "electron/**/*",
+      "server/**/*",
+      "server.js",
+      "node_modules/**/*",
+      "!node_modules/electron/**/*",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!**/node_modules/*.d.ts",
+      "!**/node_modules/.bin",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!.editorconfig",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
+      "!**/{appveyor.yml,.travis.yml,circle.yml}",
+      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
+    ],
+    "directories": {
+      "buildResources": "public"
+    },
+    "extraResources": [
+      {
+        "from": "build",
+        "to": "build"
+      },
+      {
+        "from": "videos",
+        "to": "videos"
+      },
+      {
+        "from": "subtitles",
+        "to": "subtitles"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "public/favicon.png"
+    },
+    "electronVersion": "29.1.0",
+    "nodeVersion": "18.18.0",
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Subtitles Generator",
+      "include": "installer.nsh"
+    }
   }
 }

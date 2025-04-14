@@ -1,22 +1,53 @@
-# Project dùng cho cá nhân. tool của tác giả Ngân Linh. Source: https://github.com/nganlinh4/oneclick-subtitles-generator?tab=readme-ov-file
-
 # One-Click Subtitles Generator
 
 ## Screenshots
 
 Here are some screenshots showcasing the application:
 
-| ![Screenshot 1](readme_assets/Screenshot%202025-04-03%20184013.png) | ![Screenshot 2](readme_assets/Screenshot%202025-04-05%20001543.png) |
-|:-------------------------------------------------------------------:|:-------------------------------------------------------------------:|
-| **KR/EN/VI Light/Dark Theme Support**                                         | **Can be use to just Download Video**                              |
-
-| ![Screenshot 3](readme_assets/Screenshot%202025-04-05%20001838.png) | ![Screenshot 4](readme_assets/Screenshot%202025-04-05%20001444.png) |
-|:-------------------------------------------------------------------:|:-------------------------------------------------------------------:|
-| **Parallel Processing Status/Retry**                       | **Timings Adjust/Add/Remove/Edit/Merge Texts**                           |
-
-| ![Screenshot 5](readme_assets/Screenshot%202025-04-03%20184934.png) | ![Screenshot 6](readme_assets/Screenshot%202025-04-03%20184944.png) |
-|:-------------------------------------------------------------------:|:-------------------------------------------------------------------:|
-| **API Instructions**                               | **Segmenting, Models, Format, Cache Settings**                                    |
+<div align="center">
+  <table>
+    <tr>
+      <td><img src="readme_assets/Screenshot%202025-04-08%20195440.png" width="100%"></td>
+      <td><img src="readme_assets/Screenshot%202025-04-08%20195622.png" width="100%"></td>
+      <td><img src="readme_assets/Screenshot%202025-04-08%20195917.png" width="100%"></td>
+    </tr>
+    <tr>
+      <td align="center"><strong>Light/dark theme with EN, VI, KO interface</strong></td>
+      <td align="center"><strong>Upload long video, audio, or YouTube source</strong></td>
+      <td align="center"><strong>Parallel processing with model selection for retries</strong></td>
+    </tr>
+    <tr>
+      <td><img src="readme_assets/Screenshot%202025-04-08%20200056.png" width="100%"></td>
+      <td><img src="readme_assets/Screenshot%202025-04-08%20200132.png" width="100%"></td>
+      <td><img src="readme_assets/Screenshot%202025-04-08%20200147.png" width="100%"></td>
+    </tr>
+    <tr>
+      <td align="center"><strong>Editing interface with timing controls, text editing, and visualization</strong></td>
+      <td align="center"><strong>Customize subtitle style and render video with subtitles</strong></td>
+      <td align="center"><strong>Subtitle settings with transparency mode and fullscreen support</strong></td>
+    </tr>
+    <tr>
+      <td><img src="readme_assets/Screenshot%202025-04-08%20200309.png" width="100%"></td>
+      <td><img src="readme_assets/Screenshot%202025-04-08%20200333.png" width="100%"></td>
+      <td><img src="readme_assets/Screenshot%202025-04-08%20200340.png" width="100%"></td>
+    </tr>
+    <tr>
+      <td align="center"><strong>Translate subtitles to any language while preserving timings</strong></td>
+      <td align="center"><strong>API setup, OAuth integration, update app, and factory reset</strong></td>
+      <td align="center"><strong>Configure segment duration, model selection, and time format</strong></td>
+    </tr>
+    <tr>
+      <td><img src="readme_assets/Screenshot%202025-04-08%20200351.png" width="100%"></td>
+      <td><img src="readme_assets/Screenshot%202025-04-08%20200358.png" width="100%"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td align="center"><strong>Prompt presets and customization options</strong></td>
+      <td align="center"><strong>Cache management and storage information</strong></td>
+      <td></td>
+    </tr>
+  </table>
+</div>
 
 A web application for generating timed subtitles for videos using Google's Gemini AI technology.
 
@@ -45,6 +76,88 @@ A web application for generating timed subtitles for videos using Google's Gemin
 - Google Gemini API key
 - Google YouTube API key (optional, for YouTube search functionality)
 
+### Windows Installation
+
+#### Easy Installation (using winget)
+
+##### Install FFmpeg:
+```powershell
+winget install --id Gyan.FFmpeg -e --source winget --accept-package-agreements --accept-source-agreements
+```
+
+Verify installation: Open a NEW PowerShell or Command Prompt window and run:
+```powershell
+ffmpeg -version
+```
+
+##### Install Node.js:
+```powershell
+winget install --id OpenJS.NodeJS -e --source winget --accept-package-agreements --accept-source-agreements
+```
+
+IMPORTANT: Close the current PowerShell window.
+Open a NEW PowerShell or Command Prompt window and verify installation:
+```powershell
+node -v
+npm -v
+```
+
+### macOS Installation
+
+#### Using Homebrew (Recommended)
+
+Homebrew is a package manager for macOS that makes it easy to install software.
+
+##### Install Homebrew (if not already installed):
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+##### Install Node.js:
+```bash
+brew install node
+```
+
+Verify installation:
+```bash
+node -v
+npm -v
+```
+
+##### Install FFmpeg:
+```bash
+brew install ffmpeg
+```
+
+Verify installation:
+```bash
+ffmpeg -version
+```
+
+#### Manual Installation
+
+##### Install Node.js:
+1. Download the macOS installer from [Node.js website](https://nodejs.org/)
+2. Choose the LTS (Long Term Support) version
+3. Run the installer and follow the instructions
+4. Verify installation by opening Terminal and running:
+   ```bash
+   node -v
+   npm -v
+   ```
+
+##### Install FFmpeg:
+1. Download FFmpeg from [FFmpeg website](https://ffmpeg.org/download.html)
+2. Extract the downloaded file
+3. Move the FFmpeg binary to a directory in your PATH, for example:
+   ```bash
+   sudo mv ffmpeg /usr/local/bin/
+   ```
+4. Verify installation:
+   ```bash
+   ffmpeg -version
+   ```
+
 ## Installation
 
 1. Clone this repository or download the source code
@@ -61,6 +174,8 @@ npm install
 
 ## Running the Application
 
+### On Windows and macOS
+
 To start the frontend + server concurrently:
 
 ```bash
@@ -68,6 +183,27 @@ npm run dev
 ```
 
 This will launch the application in your default web browser.
+
+### Troubleshooting
+
+#### Common Issues on macOS
+
+- **Permission Issues**: If you encounter permission errors with node_modules, run:
+  ```bash
+  chmod -R 755 ./node_modules
+  ```
+
+- **Node.js Errors**: If you get errors related to Node.js versions, try using nvm (Node Version Manager) to install and use the correct version:
+  ```bash
+  nvm install 14
+  nvm use 14
+  ```
+
+- **FFmpeg Not Found**: Ensure FFmpeg is properly installed and in your PATH:
+  ```bash
+  which ffmpeg
+  ```
+  If not found, reinstall using Homebrew: `brew reinstall ffmpeg`
 
 
 ## How to Use
