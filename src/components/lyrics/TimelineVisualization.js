@@ -1,9 +1,16 @@
-import React, { useEffect, useCallback, useRef } from 'react';
+import React, { useEffect, useCallback, useRef, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 // Import utility modules
 import { calculateMinZoom, getVisibleTimeRange, calculateVisibleTimeRange } from './utils/TimelineCalculations';
 import { drawTimeline } from './utils/TimelineDrawing';
 import { centerTimelineOnTime as centerTimeOnTime, handleTimelineClick as handleClick, animateZoom as animateZoomTo } from './utils/TimelineInteractions';
+
+// Import volume visualizer
+import VolumeVisualizer from './VolumeVisualizer';
+
+// Import optimized video streaming utilities
+import { clearUnusedChunks } from '../../utils/optimizedVideoStreaming';
 
 const TimelineVisualization = ({
   lyrics,
@@ -14,8 +21,28 @@ const TimelineVisualization = ({
   panOffset,
   setPanOffset,
   centerOnTime, // Prop to center the view on a specific time
-  timeFormat = 'seconds' // Prop to control time display format
+  timeFormat = 'seconds', // Prop to control time display format
+  videoSource, // Video source URL for audio analysis
+  showWaveform = true // Whether to show the waveform visualization
 }) => {
+  const { t } = useTranslation();
+  const [showWaveformDisabledNotice, setShowWaveformDisabledNotice] = useState(false);
+
+  // Check if waveform should be disabled due to long video
+  useEffect(() => {
+    if (showWaveform && duration > 1800) {
+      setShowWaveformDisabledNotice(true);
+
+      // Hide the notice after 10 seconds
+      const timer = setTimeout(() => {
+        setShowWaveformDisabledNotice(false);
+      }, 10000);
+
+      return () => clearTimeout(timer);
+    } else {
+      setShowWaveformDisabledNotice(false);
+    }
+  }, [showWaveform, duration]);
   const timelineRef = useRef(null);
   const lastTimeRef = useRef(0);
   const animationFrameRef = useRef(null);
@@ -240,8 +267,14 @@ const TimelineVisualization = ({
     if (timelineRef.current && lyrics.length > 0) {
       lastTimeRef.current = currentTime;
       renderTimeline();
+
+      // For long videos, optimize memory usage by clearing unused chunks
+      if (duration > 1800 && videoSource) { // 30 minutes
+        // Clear unused video chunks to free up memory
+        clearUnusedChunks(videoSource, currentTime, duration);
+      }
     }
-  }, [lyrics, currentTime, duration, zoom, panOffset, renderTimeline]);
+  }, [lyrics, currentTime, duration, zoom, panOffset, renderTimeline, videoSource]);
 
 
 
@@ -332,6 +365,19 @@ const TimelineVisualization = ({
         className="subtitle-timeline"
         style={{ cursor: 'pointer' }}
       />
+      {videoSource && showWaveform && duration <= 1800 && ( // Only show waveform for videos <= 30 minutes (1800 seconds)
+        <VolumeVisualizer
+          audioSource={videoSource}
+          duration={duration}
+          visibleTimeRange={getTimeRange()}
+          height={30}
+        />
+      )}
+      {showWaveformDisabledNotice && (
+        <div className="waveform-disabled-notice">
+          {t('timeline.waveformDisabled', 'Waveform visualization has been automatically disabled for videos longer than 30 minutes to improve performance.')}
+        </div>
+      )}
     </div>
   );
 };

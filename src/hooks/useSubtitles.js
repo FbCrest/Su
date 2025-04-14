@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { callGeminiApi } from '../services/geminiService';
+import { useState, useCallback, useEffect } from 'react';
+import { callGeminiApi, setProcessingForceStopped } from '../services/geminiService';
 import { preloadYouTubeVideo } from '../utils/videoPreloader';
 import { generateFileCacheId } from '../utils/cacheUtils';
 import { extractYoutubeVideoId } from '../utils/videoDownloader';
@@ -9,6 +9,27 @@ export const useSubtitles = (t) => {
     const [subtitlesData, setSubtitlesData] = useState(null);
     const [status, setStatus] = useState({ message: '', type: '' });
     const [isGenerating, setIsGenerating] = useState(false);
+    const [retryingSegments, setRetryingSegments] = useState([]);
+
+    // Listen for abort events
+    useEffect(() => {
+        const handleAbort = () => {
+            // Reset generating state
+            setIsGenerating(false);
+            // Reset retrying segments
+            setRetryingSegments([]);
+            // Update status
+            setStatus({ message: t('output.requestsAborted', 'All Gemini requests have been aborted'), type: 'info' });
+        };
+
+        // Add event listener
+        window.addEventListener('gemini-requests-aborted', handleAbort);
+
+        // Clean up
+        return () => {
+            window.removeEventListener('gemini-requests-aborted', handleAbort);
+        };
+    }, [t]);
 
     // Function to update segment status and dispatch event
     const updateSegmentsStatus = useCallback((segments) => {
@@ -56,6 +77,9 @@ export const useSubtitles = (t) => {
             return false;
         }
 
+        // Reset the force stop flag when starting a new generation
+        setProcessingForceStopped(false);
+
         setIsGenerating(true);
         setStatus({ message: t('output.processingVideo'), type: 'loading' });
         setSubtitlesData(null);
@@ -68,6 +92,9 @@ export const useSubtitles = (t) => {
                 preloadYouTubeVideo(input);
             } else if (inputType === 'file-upload') {
                 cacheId = await generateFileCacheId(input);
+
+                // Store the cache ID in localStorage for later use (e.g., saving edited subtitles)
+                localStorage.setItem('current_file_cache_id', cacheId);
 
                 // Check if this is a video file and get its duration
                 if (input.type.startsWith('video/')) {
@@ -102,30 +129,29 @@ export const useSubtitles = (t) => {
             // Generate new subtitles
             let subtitles;
 
-            // Check if this is a long video that needs special processing
-            if (input.type && input.type.startsWith('video/')) {
+            // Check if this is a long media file (video or audio) that needs special processing
+            if (input.type && (input.type.startsWith('video/') || input.type.startsWith('audio/'))) {
                 try {
                     const duration = await getVideoDuration(input);
                     const durationMinutes = Math.floor(duration / 60);
 
-                    // Debug log to see the video duration
-                    console.log(`Video duration: ${duration} seconds, ${durationMinutes} minutes`);
+                    // Determine if this is a video or audio file
+                    const isAudio = input.type.startsWith('audio/');
+                    const mediaType = isAudio ? 'audio' : 'video';
 
-                    // For testing purposes, always use segmentation
-                    if (true) {
-                        // Process long video by splitting it into segments
-                        subtitles = await processLongVideo(input, setStatus, t);
-                    } else {
-                        // Process normally for shorter videos
-                        subtitles = await callGeminiApi(input, inputType);
-                    }
+                    // Debug log to see the media duration
+                    console.log(`${mediaType.charAt(0).toUpperCase() + mediaType.slice(1)} duration: ${duration} seconds, ${durationMinutes} minutes`);
+
+                    // Always use segmentation for media files
+                    // Process long media file by splitting it into segments
+                    subtitles = await processLongVideo(input, setStatus, t);
                 } catch (error) {
-                    console.error('Error checking video duration:', error);
+                    console.error('Error checking media duration:', error);
                     // Fallback to normal processing
                     subtitles = await callGeminiApi(input, inputType);
                 }
             } else {
-                // Normal processing for non-video files or YouTube
+                // Normal processing for YouTube
                 subtitles = await callGeminiApi(input, inputType);
             }
 
@@ -221,32 +247,38 @@ export const useSubtitles = (t) => {
             return false;
         }
 
+        // Reset the force stop flag when retrying generation
+        setProcessingForceStopped(false);
+
         setIsGenerating(true);
         setStatus({ message: 'Retrying request to Gemini. This may take a few minutes...', type: 'loading' });
 
         try {
             let subtitles;
 
-            // Check if this is a long video that needs special processing
-            if (input.type && input.type.startsWith('video/')) {
+            // Check if this is a long media file (video or audio) that needs special processing
+            if (input.type && (input.type.startsWith('video/') || input.type.startsWith('audio/'))) {
                 try {
                     const duration = await getVideoDuration(input);
                     const durationMinutes = Math.floor(duration / 60);
 
-                    if (durationMinutes > 30) {
-                        // Process long video by splitting it into segments
-                        subtitles = await processLongVideo(input, setStatus, t);
-                    } else {
-                        // Process normally for shorter videos
-                        subtitles = await callGeminiApi(input, inputType);
-                    }
+                    // Determine if this is a video or audio file
+                    const isAudio = input.type.startsWith('audio/');
+                    const mediaType = isAudio ? 'audio' : 'video';
+
+                    // Debug log to see the media duration
+                    console.log(`${mediaType.charAt(0).toUpperCase() + mediaType.slice(1)} duration: ${duration} seconds, ${durationMinutes} minutes`);
+
+                    // Always use segmentation for media files to match generateSubtitles behavior
+                    // Process long media file by splitting it into segments
+                    subtitles = await processLongVideo(input, setStatus, t);
                 } catch (error) {
-                    console.error('Error checking video duration:', error);
+                    console.error('Error checking media duration:', error);
                     // Fallback to normal processing
                     subtitles = await callGeminiApi(input, inputType);
                 }
             } else {
-                // Normal processing for non-video files or YouTube
+                // Normal processing for YouTube
                 subtitles = await callGeminiApi(input, inputType);
             }
 
@@ -255,6 +287,14 @@ export const useSubtitles = (t) => {
             // Cache the new results
             if (inputType === 'youtube') {
                 const cacheId = extractYoutubeVideoId(input);
+                if (cacheId && subtitles && subtitles.length > 0) {
+                    await saveSubtitlesToCache(cacheId, subtitles);
+                }
+            } else if (inputType === 'file-upload') {
+                // For file uploads, generate and store the cache ID
+                const cacheId = await generateFileCacheId(input);
+                localStorage.setItem('current_file_cache_id', cacheId);
+
                 if (cacheId && subtitles && subtitles.length > 0) {
                     await saveSubtitlesToCache(cacheId, subtitles);
                 }
@@ -305,14 +345,24 @@ export const useSubtitles = (t) => {
         }
     }, [t]);
 
-    // State to track which segments are currently being retried
-    const [retryingSegments, setRetryingSegments] = useState([]);
+    // State to track which segments are currently being retried is defined at the top of the hook
 
     // Function to retry a specific segment
     const retrySegment = useCallback(async (segmentIndex, segments) => {
         // Initialize subtitlesData to empty array if it's null
         // This happens when using the strong model where we process segments one by one
         const currentSubtitles = subtitlesData || [];
+
+        // Reset the force stop flag when retrying a segment
+        setProcessingForceStopped(false);
+
+        // Determine if this is a video or audio file based on the segment name
+        // Segment names for audio files typically include 'audio' in the name
+        const isAudio = segments && segments[segmentIndex] &&
+            (segments[segmentIndex].name?.toLowerCase().includes('audio') ||
+             segments[segmentIndex].url?.toLowerCase().includes('audio'));
+        const mediaType = isAudio ? 'audio' : 'video';
+        console.log(`Retrying segment ${segmentIndex} with mediaType: ${mediaType}`);
 
         // Mark this segment as retrying
         setRetryingSegments(prev => [...prev, segmentIndex]);
@@ -339,7 +389,8 @@ export const useSubtitles = (t) => {
                         setStatus(status);
                     }
                 },
-                t
+                t,
+                mediaType
             );
 
             // Update the subtitles data with the new results

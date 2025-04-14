@@ -7,6 +7,10 @@ import LyricsHeader from './lyrics/LyricsHeader';
 import { useLyricsEditor } from '../hooks/useLyricsEditor';
 import { VariableSizeList as List } from 'react-window';
 import { convertToSRT } from '../utils/subtitleConverter';
+import { extractYoutubeVideoId } from '../utils/videoDownloader';
+import { downloadTXT, downloadSRT, downloadJSON } from '../utils/fileUtils';
+import { completeDocument, summarizeDocument } from '../services/geminiService';
+import DownloadOptionsModal from './DownloadOptionsModal';
 
 // Helper function to download files
 const downloadFile = (content, filename, type = 'text/plain') => {
@@ -74,13 +78,25 @@ const LyricsDisplay = ({
   onUpdateLyrics,
   allowEditing = false,
   seekTime = null,
-  timeFormat = 'seconds'
+  timeFormat = 'seconds',
+  onSaveSubtitles = null, // New callback for when subtitles are saved
+  videoSource = null, // Video source URL for audio analysis
+  translatedSubtitles = null, // Translated subtitles
+  videoTitle = 'subtitles' // Video title for download filenames
 }) => {
   const { t } = useTranslation();
   const [zoom, setZoom] = useState(1);
   const [panOffset, setPanOffset] = useState(0);
   const [centerTimelineAt, setCenterTimelineAt] = useState(null);
   const rowHeights = useRef({});
+  const [txtContent, setTxtContent] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processedDocument, setProcessedDocument] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showWaveform, setShowWaveform] = useState(() => {
+    // Load from localStorage, default to true if not set
+    return localStorage.getItem('show_waveform') !== 'false';
+  });
 
   // Function to calculate row height based on text content
   const getRowHeight = index => {
@@ -114,11 +130,27 @@ const LyricsDisplay = ({
     }
   }, [matchedLyrics]);
 
+  // Listen for changes to the show_waveform setting in localStorage
+  useEffect(() => {
+    const handleStorageChange = (event) => {
+      if (event.key === 'show_waveform') {
+        setShowWaveform(event.newValue !== 'false');
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
   const {
     lyrics,
     isSticky,
     setIsSticky,
     isAtOriginalState,
+    isAtSavedState,
     canUndo,
     canRedo,
     handleUndo,
@@ -132,7 +164,8 @@ const LyricsDisplay = ({
     handleDeleteLyric,
     handleTextEdit,
     handleInsertLyric,
-    handleMergeLyrics
+    handleMergeLyrics,
+    updateSavedLyrics
   } = useLyricsEditor(matchedLyrics, onUpdateLyrics);
 
   // Find current lyric index based on time
@@ -159,35 +192,152 @@ const LyricsDisplay = ({
       // Center the timeline on the seek time
       setCenterTimelineAt(seekTime);
 
-      console.log(`Centering timeline on video seek: ${seekTime}s`);
     }
   }, [seekTime]);
 
-  // Add event listeners for download buttons in LyricsDisplay
-  useEffect(() => {
-    // Add event listeners for download buttons in LyricsDisplay
-    const handleSRTDownload = () => {
-      if (lyrics && lyrics.length > 0) {
-        const srtContent = convertToSRT(lyrics).join('\n\n');
-        downloadFile(srtContent, 'subtitles.srt');
+  // Handle download request from modal
+  const handleDownload = (source, format) => {
+    const subtitlesToUse = source === 'translated' ? translatedSubtitles : lyrics;
+
+    if (subtitlesToUse && subtitlesToUse.length > 0) {
+      const langSuffix = source === 'translated' ? '_translated' : '';
+      const baseFilename = `${videoTitle || 'subtitles'}${langSuffix}`;
+
+      switch (format) {
+        case 'srt':
+          downloadSRT(subtitlesToUse, `${baseFilename}.srt`);
+          break;
+        case 'json':
+          downloadJSON(subtitlesToUse, `${baseFilename}.json`);
+          break;
+        case 'txt':
+          const content = downloadTXT(subtitlesToUse, `${baseFilename}.txt`);
+          setTxtContent(content);
+          break;
+        default:
+          break;
       }
-    };
+    }
+  };
 
-    const handleJSONDownload = () => {
-      if (lyrics && lyrics.length > 0) {
-        const jsonContent = JSON.stringify(lyrics, null, 2);
-        downloadFile(jsonContent, 'subtitles.json', 'application/json');
+  // Handle process request from modal
+  const handleProcess = async (source, processType, model) => {
+    const subtitlesToUse = source === 'translated' ? translatedSubtitles : lyrics;
+
+    if (!subtitlesToUse || subtitlesToUse.length === 0) return;
+
+    // First, get the text content if we don't have it yet
+    let textContent = txtContent;
+    if (!textContent) {
+      textContent = subtitlesToUse.map(subtitle => subtitle.text).join('\n\n');
+      setTxtContent(textContent);
+    }
+
+    setIsProcessing(true);
+    try {
+      let result;
+      if (processType === 'consolidate') {
+        result = await completeDocument(textContent, model);
+      } else if (processType === 'summarize') {
+        result = await summarizeDocument(textContent, model);
       }
-    };
 
-    window.addEventListener('download-srt', handleSRTDownload);
-    window.addEventListener('download-json', handleJSONDownload);
+      setProcessedDocument(result);
 
-    return () => {
-      window.removeEventListener('download-srt', handleSRTDownload);
-      window.removeEventListener('download-json', handleJSONDownload);
-    };
-  }, [lyrics]);
+      // Show a temporary success message
+      const successMessage = document.createElement('div');
+      successMessage.className = 'save-success-message';
+      successMessage.textContent = processType === 'consolidate'
+        ? t('output.documentCompleted', 'Document completed successfully')
+        : t('output.summaryCompleted', 'Summary completed successfully');
+      document.body.appendChild(successMessage);
+
+      // Remove the message after 3 seconds
+      setTimeout(() => {
+        if (document.body.contains(successMessage)) {
+          document.body.removeChild(successMessage);
+        }
+      }, 3000);
+
+      // Download the processed document
+      const langSuffix = source === 'translated' ? '_translated' : '';
+      const filename = `${videoTitle || 'subtitles'}_${processType === 'consolidate' ? 'completed' : 'summary'}${langSuffix}.txt`;
+      downloadFile(result, filename);
+    } catch (error) {
+      console.error(`Error ${processType === 'consolidate' ? 'completing' : 'summarizing'} document:`, error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Function to save current subtitles to cache
+  const handleSave = async () => {
+    try {
+      // Get the current video source
+      const currentVideoUrl = localStorage.getItem('current_youtube_url');
+      const currentFileUrl = localStorage.getItem('current_file_url');
+      let cacheId = null;
+
+      if (currentVideoUrl) {
+        // For YouTube videos
+        cacheId = extractYoutubeVideoId(currentVideoUrl);
+      } else if (currentFileUrl) {
+        // For uploaded files, the cacheId is already stored
+        cacheId = localStorage.getItem('current_file_cache_id');
+      }
+
+      if (!cacheId) {
+        console.error('No cache ID found for current media');
+        console.log('Debug info - localStorage values:', {
+          currentVideoUrl,
+          currentFileUrl,
+          currentFileCacheId: localStorage.getItem('current_file_cache_id')
+        });
+        return;
+      }
+
+      // Save to cache
+      const response = await fetch('http://localhost:3004/api/save-subtitles', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          cacheId,
+          subtitles: lyrics
+        })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        console.log('Subtitles saved successfully');
+        // Show a temporary success message
+        const saveMessage = document.createElement('div');
+        saveMessage.className = 'save-success-message';
+        saveMessage.textContent = t('output.subtitlesSaved', 'Progress saved successfully');
+        document.body.appendChild(saveMessage);
+
+        // Remove the message after 3 seconds
+        setTimeout(() => {
+          if (document.body.contains(saveMessage)) {
+            document.body.removeChild(saveMessage);
+          }
+        }, 3000);
+
+        // Update the saved lyrics state in the editor
+        updateSavedLyrics();
+
+        // Call the callback if provided to update parent component state
+        if (onSaveSubtitles) {
+          onSaveSubtitles(lyrics);
+        }
+      } else {
+        console.error('Failed to save subtitles:', result.error);
+      }
+    } catch (error) {
+      console.error('Error saving subtitles:', error);
+    }
+  };
 
   // Setup drag event handlers with performance optimizations
   const handleMouseDown = (e, index, field) => {
@@ -239,9 +389,11 @@ const LyricsDisplay = ({
           canUndo={canUndo}
           canRedo={canRedo}
           isAtOriginalState={isAtOriginalState}
+          isAtSavedState={isAtSavedState}
           onUndo={handleUndo}
           onRedo={handleRedo}
           onReset={handleReset}
+          onSave={handleSave}
           zoom={zoom}
           setZoom={setZoom}
           panOffset={panOffset}
@@ -258,6 +410,8 @@ const LyricsDisplay = ({
           setPanOffset={setPanOffset}
           centerOnTime={centerTimelineAt}
           timeFormat={timeFormat}
+          videoSource={videoSource}
+          showWaveform={showWaveform}
         />
       </div>
 
@@ -311,28 +465,26 @@ const LyricsDisplay = ({
         <div className="download-buttons">
           <button
             className="download-btn"
-            onClick={() => window.dispatchEvent(new Event('download-srt'))}
+            onClick={() => setIsModalOpen(true)}
             disabled={!lyrics.length}
           >
-            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" fill="none">
+            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" strokeWidth="2" fill="none">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
-            {t('output.downloadSrt', 'Download SRT')}
+            <span>{t('download.downloadOptions', 'Download & Process')}</span>
           </button>
-          <button
-            className="download-btn"
-            onClick={() => window.dispatchEvent(new Event('download-json'))}
-            disabled={!lyrics.length}
-          >
-            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" fill="none">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
-            {t('output.downloadJson', 'Download JSON')}
-          </button>
+
+          {/* Download Options Modal */}
+          <DownloadOptionsModal
+            isOpen={isModalOpen}
+            onClose={() => setIsModalOpen(false)}
+            onDownload={handleDownload}
+            onProcess={handleProcess}
+            hasTranslation={translatedSubtitles && translatedSubtitles.length > 0}
+            hasOriginal={lyrics && lyrics.length > 0}
+          />
         </div>
       </div>
     </div>

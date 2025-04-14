@@ -1,22 +1,23 @@
 /**
- * Service for processing video segments
+ * Service for processing video and audio segments
  */
 
-import { callGeminiApi } from './geminiService';
+import { callGeminiApi, getProcessingForceStopped } from './geminiService';
 import { fetchSegment } from '../utils/videoSplitter';
 import { parseRawTextManually } from '../utils/subtitleParser';
 
 /**
- * Process a single video segment
+ * Process a single media segment (video or audio)
  * @param {Object} segment - The segment object with URL
  * @param {number} segmentIndex - The index of the segment
  * @param {number} startTime - The start time offset for this segment
  * @param {string} segmentCacheId - The cache ID for this segment
  * @param {Function} onStatusUpdate - Callback for status updates
  * @param {Function} t - Translation function
+ * @param {string} mediaType - Type of media ('video' or 'audio')
  * @returns {Promise<Array>} - Array of subtitle objects with adjusted timestamps
  */
-export async function processSegment(segment, segmentIndex, startTime, segmentCacheId, onStatusUpdate, t) {
+export async function processSegment(segment, segmentIndex, startTime, segmentCacheId, onStatusUpdate, t, mediaType = 'video') {
     let retryCount = 0;
     const maxRetries = 3;
     let success = false;
@@ -29,9 +30,21 @@ export async function processSegment(segment, segmentIndex, startTime, segmentCa
     });
 
     while (!success && retryCount < maxRetries) {
+        // Check if processing has been force stopped
+        if (getProcessingForceStopped()) {
+            console.log(`Segment ${segmentIndex+1} processing was force stopped, aborting retries`);
+            throw new Error('Processing was force stopped');
+        }
         try {
             // Fetch the segment file from the server
-            const segmentFile = await fetchSegment(segment.url);
+            const segmentFile = await fetchSegment(segment.url, segmentIndex, mediaType);
+
+            // Log the segment file details
+            console.log(`Processing ${mediaType} segment ${segmentIndex+1}:`, {
+                name: segmentFile.name,
+                type: segmentFile.type,
+                size: segmentFile.size
+            });
 
             // Process the segment with Gemini
             segmentSubtitles = await callGeminiApi(segmentFile, 'file-upload');
@@ -115,12 +128,40 @@ export async function processSegment(segment, segmentIndex, startTime, segmentCa
         throw new Error(`Failed to process segment ${segmentIndex+1}`);
     }
 
-    // Adjust timestamps for this segment and return
-    return segmentSubtitles.map(subtitle => ({
-        ...subtitle,
-        start: subtitle.start + startTime,
-        end: subtitle.end + startTime
-    }));
+    // Get the actual segment duration and start time if available
+    const segmentDuration = segment.duration !== undefined ? segment.duration : null;
+
+    // Log detailed information about this segment
+    console.log(`Adjusting timestamps for segment ${segmentIndex+1}:`);
+    console.log(`  Start time: ${startTime.toFixed(2)}s`);
+    if (segmentDuration) {
+        console.log(`  Duration: ${segmentDuration.toFixed(2)}s`);
+        console.log(`  End time: ${(startTime + segmentDuration).toFixed(2)}s`);
+    }
+
+    // Log the original timestamps for debugging
+    console.log(`  Original timestamps (first 3 subtitles):`,
+        segmentSubtitles.slice(0, 3).map(s => `${s.start.toFixed(2)}-${s.end.toFixed(2)}: ${s.text.substring(0, 20)}...`));
+
+    // Adjust timestamps based on segment start time
+    const adjustedSubtitles = segmentSubtitles.map(subtitle => {
+        // Apply the offset based on actual segment start time
+        const adjustedStart = subtitle.start + startTime;
+        const adjustedEnd = subtitle.end + startTime;
+
+        return {
+            ...subtitle,
+            start: adjustedStart,
+            end: adjustedEnd
+        };
+    });
+
+    // Log the adjusted timestamps for debugging
+    console.log(`  Adjusted timestamps (first 3 subtitles):`,
+        adjustedSubtitles.slice(0, 3).map(s => `${s.start.toFixed(2)}-${s.end.toFixed(2)}: ${s.text.substring(0, 20)}...`));
+    console.log(`  Total subtitles in segment: ${adjustedSubtitles.length}`);
+
+    return adjustedSubtitles;
 }
 
 /**
@@ -129,13 +170,15 @@ export async function processSegment(segment, segmentIndex, startTime, segmentCa
  * @param {string} status - Status type
  * @param {string} message - Status message
  * @param {Function} t - Translation function
+ * @param {string} timeRange - Time range for the segment (optional)
  */
-export const updateSegmentStatus = (index, status, message, t) => {
+export const updateSegmentStatus = (index, status, message, t, timeRange = null) => {
     // Create the status object
     const segmentStatus = {
         index,
         status,
         message,
+        timeRange,
         shortMessage: status === 'loading' ? t('output.processing') :
                      status === 'success' ? t('output.done') :
                      status === 'error' ? t('output.failed') :
