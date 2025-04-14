@@ -374,3 +374,132 @@ const deduplicateAndSortSubtitles = (subtitles) => {
     console.log('Extracted subtitles:', uniqueSubtitles);
     return uniqueSubtitles;
 };
+
+/**
+ * Parse translated subtitles from Gemini response
+ * @param {string} text - The translated text from Gemini
+ * @returns {Array} - Array of subtitle objects
+ */
+export const parseTranslatedSubtitles = (text) => {
+    if (!text) return [];
+
+    const subtitles = [];
+    const lines = text.split('\n');
+    let currentSubtitle = {};
+    let index = 0;
+    let originalId = null;
+
+    while (index < lines.length) {
+        const line = lines[index].trim();
+
+        // Skip empty lines
+        if (!line) {
+            index++;
+            continue;
+        }
+
+        // Check if this is a subtitle number
+        if (/^\d+$/.test(line)) {
+            // If we have a complete subtitle, add it to the list
+            if (currentSubtitle.startTime && currentSubtitle.endTime && currentSubtitle.text) {
+                subtitles.push({
+                    id: subtitles.length + 1,
+                    startTime: currentSubtitle.startTime,
+                    endTime: currentSubtitle.endTime,
+                    text: currentSubtitle.text,
+                    originalId: currentSubtitle.originalId
+                });
+            }
+
+            // Start a new subtitle
+            currentSubtitle = { id: parseInt(line) };
+            originalId = null; // Reset originalId for the new subtitle
+            index++;
+        }
+        // Check if this is a timestamp line
+        else if (line.includes('-->')) {
+            const times = line.split('-->');
+            if (times.length === 2) {
+                currentSubtitle.startTime = times[0].trim();
+                currentSubtitle.endTime = times[1].trim();
+            }
+            index++;
+        }
+        // Check if this is an original ID comment
+        else if (line.startsWith('<!-- original_id:')) {
+            const idMatch = line.match(/<!-- original_id:\s*(\d+)\s*-->/);
+            if (idMatch && idMatch[1]) {
+                currentSubtitle.originalId = parseInt(idMatch[1]);
+            }
+            index++;
+        }
+        // This must be the subtitle text
+        else {
+            // Collect all text lines until we hit an empty line, a number, or an original ID comment
+            let textLines = [];
+            while (index < lines.length &&
+                  lines[index].trim() &&
+                  !/^\d+$/.test(lines[index].trim()) &&
+                  !lines[index].trim().startsWith('<!-- original_id:')) {
+                textLines.push(lines[index].trim());
+                index++;
+            }
+
+            currentSubtitle.text = textLines.join(' ');
+
+            // Check if the next line is an original ID comment
+            if (index < lines.length && lines[index].trim().startsWith('<!-- original_id:')) {
+                const idMatch = lines[index].trim().match(/<!-- original_id:\s*(\d+)\s*-->/);
+                if (idMatch && idMatch[1]) {
+                    currentSubtitle.originalId = parseInt(idMatch[1]);
+                }
+                index++;
+            }
+
+            // If we've reached the end or the next line is a number, add this subtitle
+            if (index >= lines.length || (index < lines.length && /^\d+$/.test(lines[index].trim()))) {
+                if (currentSubtitle.startTime && currentSubtitle.endTime && currentSubtitle.text) {
+                    subtitles.push({
+                        id: subtitles.length + 1,
+                        startTime: currentSubtitle.startTime,
+                        endTime: currentSubtitle.endTime,
+                        text: currentSubtitle.text,
+                        originalId: currentSubtitle.originalId
+                    });
+                }
+                currentSubtitle = {};
+            }
+        }
+    }
+
+    // Add the last subtitle if it exists
+    if (currentSubtitle.startTime && currentSubtitle.endTime && currentSubtitle.text) {
+        subtitles.push({
+            id: subtitles.length + 1,
+            startTime: currentSubtitle.startTime,
+            endTime: currentSubtitle.endTime,
+            text: currentSubtitle.text,
+            originalId: currentSubtitle.originalId
+        });
+    }
+
+    // Try to load the original subtitles map from localStorage
+    try {
+        const originalSubtitlesMapJson = localStorage.getItem('original_subtitles_map');
+        if (originalSubtitlesMapJson) {
+            const originalSubtitlesMap = JSON.parse(originalSubtitlesMapJson);
+
+            // Add a reference to the target language
+            const targetLanguage = localStorage.getItem('translation_target_language');
+            if (targetLanguage) {
+                subtitles.forEach(sub => {
+                    sub.language = targetLanguage;
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Error loading original subtitles map:', error);
+    }
+
+    return subtitles;
+};

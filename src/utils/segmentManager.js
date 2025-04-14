@@ -12,16 +12,29 @@ import { processSegment, updateSegmentStatus } from '../services/segmentProcessi
  * @param {Array} currentSubtitles - Current subtitles array
  * @param {Function} onStatusUpdate - Callback for status updates
  * @param {Function} t - Translation function
+ * @param {string} mediaType - Type of media ('video' or 'audio')
  * @returns {Promise<Array>} - Updated array of subtitle objects
  */
-export const retrySegmentProcessing = async (segmentIndex, segments, currentSubtitles, onStatusUpdate, t) => {
+export const retrySegmentProcessing = async (segmentIndex, segments, currentSubtitles, onStatusUpdate, t, mediaType = 'video') => {
     if (!segments || !segments[segmentIndex]) {
         throw new Error(`Segment ${segmentIndex + 1} not found`);
     }
 
     const segment = segments[segmentIndex];
-    const startTime = segmentIndex * getMaxSegmentDurationSeconds();
+
+    // Use the actual start time from the segment if available, otherwise fall back to theoretical calculation
+    const startTime = segment.startTime !== undefined ? segment.startTime : segmentIndex * getMaxSegmentDurationSeconds();
+    const segmentDuration = segment.duration !== undefined ? segment.duration : getMaxSegmentDurationSeconds();
+    const endTime = startTime + segmentDuration;
     const segmentCacheId = `segment_${segment.name}`;
+
+    // Format time range for display
+    const formatTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+    const timeRange = `${formatTime(startTime)} - ${formatTime(endTime)}`;
 
     // Update status to show we're retrying this segment
     onStatusUpdate({
@@ -30,14 +43,15 @@ export const retrySegmentProcessing = async (segmentIndex, segments, currentSubt
     });
 
     // Update just this segment's status
-    updateSegmentStatus(segmentIndex, 'retrying', t('output.retryingSegment', 'Retrying segment...'), t);
+    updateSegmentStatus(segmentIndex, 'retrying', t('output.retryingSegment', 'Retrying segment...'), t, timeRange);
 
     try {
         // Process the segment
-        const newSegmentSubtitles = await processSegment(segment, segmentIndex, startTime, segmentCacheId, onStatusUpdate, t);
+        console.log(`Retrying segment ${segmentIndex + 1} with startTime=${startTime}, mediaType=${mediaType}`);
+        const newSegmentSubtitles = await processSegment(segment, segmentIndex, startTime, segmentCacheId, onStatusUpdate, t, mediaType);
 
         // Update status to show success
-        updateSegmentStatus(segmentIndex, 'success', t('output.processingComplete', 'Processing complete'), t);
+        updateSegmentStatus(segmentIndex, 'success', t('output.processingComplete', 'Processing complete'), t, timeRange);
 
         // Always combine with existing subtitles (if any)
         // Ensure currentSubtitles is at least an empty array
@@ -45,7 +59,12 @@ export const retrySegmentProcessing = async (segmentIndex, segments, currentSubt
 
         // Remove subtitles from this segment's time range
         const segmentStartTime = startTime;
-        const segmentEndTime = startTime + getMaxSegmentDurationSeconds();
+        // Use the actual duration from the segment if available, otherwise fall back to theoretical calculation
+        const segmentDuration = segment.duration !== undefined ? segment.duration : getMaxSegmentDurationSeconds();
+        const segmentEndTime = startTime + segmentDuration;
+
+        console.log(`Using actual segment duration: ${segmentDuration}s for segment ${segmentIndex + 1}`);
+        console.log(`Segment ${segmentIndex + 1} actual time range: ${segmentStartTime}s to ${segmentEndTime}s`);
 
         // Filter out subtitles that belong to this segment's time range
         // Keep subtitles that are completely outside this segment's time range
