@@ -54,9 +54,7 @@ router.get('/segment-exists/:segmentId', (req, res) => {
  * POST /api/download-video - Download a YouTube video
  */
 router.post('/download-video', async (req, res) => {
-  const { videoId, quality } = req.body;
-
-  console.log(`[QUALITY DEBUG] Received download request for videoId: ${videoId} with quality: ${quality || 'not specified'}`);
+  const { videoId } = req.body;
 
   if (!videoId) {
     return res.status(400).json({ error: 'Video ID is required' });
@@ -74,8 +72,8 @@ router.post('/download-video', async (req, res) => {
   }
 
   try {
-    // Download the video using JavaScript libraries with specified quality
-    const result = await downloadYouTubeVideo(videoId, quality);
+    // Download the video using JavaScript libraries
+    const result = await downloadYouTubeVideo(videoId);
 
     // Check if the file was created successfully
     if (fs.existsSync(videoPath)) {
@@ -116,7 +114,7 @@ router.post('/upload-and-split-video', express.raw({ limit: '2gb', type: '*/*' }
     const contentType = req.headers['content-type'] || '';
     const isAudio = contentType.startsWith('audio/');
     const mediaType = isAudio ? 'audio' : 'video';
-
+    
     // Generate a unique filename
     const timestamp = Date.now();
     const fileExtension = contentType.split('/')[1] || (isAudio ? 'mp3' : 'mp4');
@@ -137,7 +135,7 @@ router.post('/upload-and-split-video', express.raw({ limit: '2gb', type: '*/*' }
       segmentDuration,
       VIDEOS_DIR,
       `segment_${timestamp}`,
-      {
+      { 
         fastSplit,
         mediaType
       }
@@ -170,7 +168,7 @@ router.post('/split-video', express.raw({ limit: '2gb', type: '*/*' }), async (r
     const contentType = req.headers['content-type'] || '';
     const isAudio = contentType.startsWith('audio/');
     const mediaType = isAudio ? 'audio' : 'video';
-
+    
     // Generate a unique filename for the original media file
     const mediaId = req.query.mediaId || req.query.videoId || `${mediaType}_${Date.now()}`;
     const fileExtension = contentType.split('/')[1] || (isAudio ? 'mp3' : 'mp4');
@@ -191,7 +189,7 @@ router.post('/split-video', express.raw({ limit: '2gb', type: '*/*' }), async (r
       segmentDuration,
       VIDEOS_DIR,
       `${mediaId}_part`,
-      {
+      { 
         fastSplit,
         mediaType
       }
