@@ -1543,23 +1543,17 @@ const SettingsModal = ({ onClose, onSave, apiKeysSet, setApiKeysSet }) => {
                   <strong>{t('settings.version', 'Version')}:</strong> {new Date().toISOString().slice(0, 10).replace(/-/g, '')}
                 </p>
                 <div className="creator-info">
-                  <p><strong>{t('settings.creator', 'Creator')}:</strong> nganlinh4</p>
+                  <p><strong>{t('settings.creator', 'Creator')}:</strong> Sú</p>
                   <p>
-                    <strong>GitHub:</strong>
-                    <a href="https://github.com/nganlinh4" target="_blank" rel="noopener noreferrer">
-                      https://github.com/nganlinh4
-                    </a>
-                  </p>
-                  <p>
-                    <strong>Google Scholar:</strong>
-                    <a href="https://scholar.google.com/citations?user=kWFVuFwAAAAJ&hl=en" target="_blank" rel="noopener noreferrer">
-                      https://scholar.google.com/citations?user=kWFVuFwAAAAJ&hl=en
+                    <strong>Website:</strong>
+                    <a href="https://meodibui.pages.dev/" target="_blank" rel="noopener noreferrer">
+                      https://meodibui.pages.dev/
                     </a>
                   </p>
                   <p>
                     <strong>Email:</strong>
-                    <a href="mailto:nganlinh4@gmail.com">
-                      nganlinh4@gmail.com
+                    <a href="mailto:0rion24kk@gmail.com">
+                      0rion24kk@gmail.com
                     </a>
                   </p>
                 </div>
