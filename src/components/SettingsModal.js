@@ -1557,9 +1557,6 @@ const SettingsModal = ({ onClose, onSave, apiKeysSet, setApiKeysSet }) => {
                     </a>
                   </p>
                 </div>
-                <div className="app-description">
-                  <p>{t('settings.appDescription', 'One-click Subtitles Generator is a tool that helps you generate, edit, and translate subtitles for your videos with just one click.')}</p>
-                </div>
               </div>
             </div>
           </div>
