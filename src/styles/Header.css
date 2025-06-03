@@ -16,46 +16,48 @@
 }
 
 :root {
-  --primary-color: #00f0ff;
-  --accent-color: #ff00ff;
-  --primary-rgb: 0, 240, 255;
-  --accent-rgb: 255, 0, 255;
-}
-
-@keyframes neon-flicker {
-  0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
-    opacity: 1;
-    text-shadow:
-      0 0 5px #fff,
-      0 0 10px var(--primary-color),
-      0 0 20px var(--primary-color),
-      0 0 40px var(--accent-color),
-      0 0 80px var(--accent-color);
-  }
-  20%, 22%, 24%, 55% {
-    opacity: 0.7;
-    text-shadow: none;
-  }
+  --primary-color: #6a5acd;
+  --accent-color: #ff6ec4;
+  --primary-rgb: 106, 90, 205;
+  --accent-rgb: 255, 110, 196;
 }
 
 .app-title {
   margin: 0;
-  font-size: 2rem;
+  font-size: 2.2rem;
   font-weight: 800;
-  color: var(--accent-color);
+  color: transparent;
+  background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   font-family: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   letter-spacing: -0.5px;
-  position: relative;
   cursor: pointer;
-  transition: transform 0.3s ease;
-  animation: neon-flicker 2.5s infinite alternate;
+  position: relative;
+  transition: transform 0.3s ease, text-shadow 0.3s ease;
+}
+
+.app-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -6px;
+  width: 0;
+  height: 3px;
+  background: var(--accent-color);
+  border-radius: 2px;
+  transition: width 0.3s ease;
 }
 
 .app-title:hover {
-  transform: scale(1.05);
+  transform: scale(1.03);
+  text-shadow: 0 2px 12px rgba(var(--primary-rgb), 0.3);
 }
 
-
+.app-title:hover::after {
+  width: 100%;
+}
 
 
 
