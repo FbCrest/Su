@@ -3,22 +3,53 @@
  */
 
 /**
- * Convert SRT time format (00:00:00,000) to seconds
- * @param {string} timeString - Time in SRT format
+ * Convert time string to seconds
+ * @param {string} timeString - Time in SRT format (00:00:00,000) or MMmSSsNNNms format (00m00s000ms)
  * @returns {number} - Time in seconds
  */
 export const convertTimeStringToSeconds = (timeString) => {
   if (!timeString) return 0;
 
-  const match = timeString.match(/^(\d+):(\d+):(\d+),(\d+)$/);
-  if (!match) return 0;
+  // Check if timeString is a string
+  if (typeof timeString !== 'string') {
+    console.warn('Invalid time string type:', typeof timeString, timeString);
+    return 0;
+  }
 
-  const hours = parseInt(match[1]);
-  const minutes = parseInt(match[2]);
-  const seconds = parseInt(match[3]);
-  const milliseconds = parseInt(match[4]);
+  // Handle SRT format (00:00:00,000)
+  const srtMatch = timeString.match(/^(\d+):(\d+):(\d+),(\d+)$/);
+  if (srtMatch) {
+    const hours = parseInt(srtMatch[1]);
+    const minutes = parseInt(srtMatch[2]);
+    const seconds = parseInt(srtMatch[3]);
+    const milliseconds = parseInt(srtMatch[4]);
 
-  return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000;
+    return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000;
+  }
+
+  // Handle MMmSSsNNNms format (e.g., 00m30s500ms)
+  const mmssmsMatch = timeString.match(/^(\d+)m(\d+)s(\d+)ms$/);
+  if (mmssmsMatch) {
+    const minutes = parseInt(mmssmsMatch[1]);
+    const seconds = parseInt(mmssmsMatch[2]);
+    const milliseconds = parseInt(mmssmsMatch[3]);
+
+    return minutes * 60 + seconds + milliseconds / 1000;
+  }
+
+  // Handle WebVTT format (00:00:00.000)
+  const vttMatch = timeString.match(/^(\d+):(\d+):(\d+)\.(\d+)$/);
+  if (vttMatch) {
+    const hours = parseInt(vttMatch[1]);
+    const minutes = parseInt(vttMatch[2]);
+    const seconds = parseInt(vttMatch[3]);
+    const milliseconds = parseInt(vttMatch[4]);
+
+    return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000;
+  }
+
+  console.warn('Unrecognized time format:', timeString);
+  return 0;
 };
 
 /**
@@ -64,14 +95,30 @@ export const subtitlesToVtt = (subtitles, isTranslated = false, originalSubtitle
   subtitles.forEach((subtitle, index) => {
     let startTime, endTime;
 
-    if (isTranslated && originalSubtitles && subtitle.originalId) {
-      // For translated subtitles, use the timing from the original subtitle
-      const originalSub = originalSubtitles.find(s => s.id === subtitle.originalId);
-      if (originalSub) {
+    if (isTranslated && originalSubtitles) {
+      // For translated subtitles, try multiple methods to find the original timing
+
+      // Method 1: Use originalId to find the matching original subtitle
+      if (subtitle.originalId) {
+        const originalSub = originalSubtitles.find(s => s.id === subtitle.originalId);
+        if (originalSub) {
+
+          startTime = secondsToVttTime(originalSub.start);
+          endTime = secondsToVttTime(originalSub.end);
+        }
+      }
+
+      // Method 2: If no match by ID, try to match by index
+      if (!startTime && index < originalSubtitles.length) {
+        const originalSub = originalSubtitles[index];
+
         startTime = secondsToVttTime(originalSub.start);
         endTime = secondsToVttTime(originalSub.end);
-      } else {
-        // Fallback to the translated subtitle's own timing
+      }
+
+      // Method 3: Fallback to the translated subtitle's own timing if available
+      if (!startTime) {
+
         startTime = subtitle.start !== undefined
           ? secondsToVttTime(subtitle.start)
           : srtTimeToVttTime(subtitle.startTime);

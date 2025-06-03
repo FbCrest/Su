@@ -15,7 +15,9 @@ import { processSegment, updateSegmentStatus } from '../services/segmentProcessi
  * @param {string} mediaType - Type of media ('video' or 'audio')
  * @returns {Promise<Array>} - Updated array of subtitle objects
  */
-export const retrySegmentProcessing = async (segmentIndex, segments, currentSubtitles, onStatusUpdate, t, mediaType = 'video') => {
+export const retrySegmentProcessing = async (segmentIndex, segments, currentSubtitles, onStatusUpdate, t, mediaType = 'video', options = {}) => {
+    // Extract options
+    const { userProvidedSubtitles, modelId } = options;
     if (!segments || !segments[segmentIndex]) {
         throw new Error(`Segment ${segmentIndex + 1} not found`);
     }
@@ -47,8 +49,16 @@ export const retrySegmentProcessing = async (segmentIndex, segments, currentSubt
 
     try {
         // Process the segment
-        console.log(`Retrying segment ${segmentIndex + 1} with startTime=${startTime}, mediaType=${mediaType}`);
-        const newSegmentSubtitles = await processSegment(segment, segmentIndex, startTime, segmentCacheId, onStatusUpdate, t, mediaType);
+
+        if (userProvidedSubtitles) {
+
+
+        }
+
+        // Log the model being used for this segment
+
+
+        const newSegmentSubtitles = await processSegment(segment, segmentIndex, startTime, segmentCacheId, onStatusUpdate, t, mediaType, { userProvidedSubtitles, modelId });
 
         // Update status to show success
         updateSegmentStatus(segmentIndex, 'success', t('output.processingComplete', 'Processing complete'), t, timeRange);
@@ -63,8 +73,8 @@ export const retrySegmentProcessing = async (segmentIndex, segments, currentSubt
         const segmentDuration = segment.duration !== undefined ? segment.duration : getMaxSegmentDurationSeconds();
         const segmentEndTime = startTime + segmentDuration;
 
-        console.log(`Using actual segment duration: ${segmentDuration}s for segment ${segmentIndex + 1}`);
-        console.log(`Segment ${segmentIndex + 1} actual time range: ${segmentStartTime}s to ${segmentEndTime}s`);
+
+
 
         // Filter out subtitles that belong to this segment's time range
         // Keep subtitles that are completely outside this segment's time range
@@ -88,9 +98,19 @@ export const retrySegmentProcessing = async (segmentIndex, segments, currentSubt
             subtitle.id = index + 1;
         });
 
-        console.log(`Segment ${segmentIndex + 1} time range: ${segmentStartTime}s to ${segmentEndTime}s`);
-        console.log(`Combined ${filteredSubtitles.length} existing subtitles with ${newSegmentSubtitles.length} new subtitles from segment ${segmentIndex + 1}`);
-        console.log(`Total subtitles after combining: ${updatedSubtitles.length}`);
+
+
+
+
+        // Store the updated subtitles in localStorage to ensure they're not overwritten
+        try {
+            // Save to localStorage as a backup to prevent race conditions
+            localStorage.setItem('latest_segment_subtitles', JSON.stringify(updatedSubtitles));
+
+        } catch (e) {
+            console.error('Error saving latest subtitles to localStorage:', e);
+        }
+
         return updatedSubtitles;
     } catch (error) {
         console.error(`Error retrying segment ${segmentIndex + 1}:`, error);

@@ -1,3 +1,6 @@
+// Import SERVER_URL from config
+import { SERVER_URL } from '../config';
+
 /**
  * Parse time string (00:00:00,000 or 00:00:00.000) to seconds
  * @param {string} timeString - Time string in format 00:00:00,000 or 00:00:00.000
@@ -36,6 +39,29 @@ export const secondsToSrtTime = (seconds) => {
   const milliseconds = Math.floor((seconds % 1) * 1000);
 
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')},${milliseconds.toString().padStart(3, '0')}`;
+};
+
+/**
+ * Clean subtitle text by removing any SRT formatting that might be embedded in it
+ * @param {string} text - The subtitle text that might contain SRT formatting
+ * @returns {string} - Cleaned text without SRT formatting
+ */
+export const cleanSubtitleText = (text) => {
+  if (!text) return '';
+
+  // Remove any SRT entry numbers at the beginning of lines
+  let cleanedText = text.replace(/^"?\d+\s*$/gm, '');
+
+  // Remove timestamp lines (00:00:00,000 --> 00:00:00,000)
+  cleanedText = cleanedText.replace(/^\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}\s*$/gm, '');
+
+  // Remove any quotes that might be wrapping the entire text
+  cleanedText = cleanedText.replace(/^"|"$/g, '');
+
+  // Remove any empty lines that might have been created
+  cleanedText = cleanedText.split('\n').filter(line => line.trim()).join('\n');
+
+  return cleanedText.trim();
 };
 
 /**
@@ -81,7 +107,10 @@ export const generateSrtContent = (subtitles) => {
       endTime = '00:00:05,000';
     }
 
-    return `${index + 1}\n${startTime} --> ${endTime}\n${subtitle.text}`;
+    // Clean the subtitle text to remove any SRT formatting that might be embedded in it
+    const cleanedText = cleanSubtitleText(subtitle.text);
+
+    return `${index + 1}\n${startTime} --> ${endTime}\n${cleanedText}`;
   }).join('\n\n');
 };
 
@@ -186,7 +215,7 @@ export const downloadJSON = (subtitles, filename) => {
  * @returns {string} - Plain text content
  */
 export const generateTxtContent = (subtitles) => {
-  return subtitles.map(subtitle => subtitle.text).join('\n\n');
+  return subtitles.map(subtitle => subtitle.text).join('\n');
 };
 
 /**
@@ -218,4 +247,131 @@ export const downloadTXT = (subtitles, filename) => {
 
   // Return the plain text content for potential further processing
   return content;
+};
+
+/**
+ * Convert a file to base64 string
+ * @param {File} file - The file to convert
+ * @returns {Promise<string>} - Promise resolving to base64 string
+ */
+export const fileToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      // Extract the base64 data from the data URL
+      // Format is: data:[<mediatype>][;base64],<data>
+      const base64String = reader.result.split(',')[1];
+      resolve(base64String);
+    };
+    reader.onerror = (error) => {
+      console.error('Error converting file to base64:', error);
+      reject(error);
+    };
+  });
+};
+
+/**
+ * Extract audio from a video and download it
+ * @param {string} videoPath - Path to the video file
+ * @param {string} filename - Name of the file to download (without extension)
+ * @returns {Promise<boolean>} - Promise resolving to success status
+ */
+export const extractAndDownloadAudio = async (videoPath, filename = 'audio') => {
+  try {
+
+
+    // Create a download link element that we'll use later
+    const a = document.createElement('a');
+    document.body.appendChild(a);
+    a.style.display = 'none';
+
+    // Handle blob URLs differently - we need to fetch the blob and send the actual data
+    if (videoPath.startsWith('blob:')) {
+
+
+      try {
+        // Fetch the blob data
+        const videoBlob = await fetch(videoPath).then(r => r.blob());
+
+
+        // Create a form for the file upload
+        const formData = new FormData();
+        formData.append('video', videoBlob, 'video.mp4');
+
+        // Use fetch with blob to download directly
+        const response = await fetch(`${SERVER_URL}/api/extract-audio-from-blob`, {
+          method: 'POST',
+          body: videoBlob,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+        }
+
+        // Get the blob from the response
+        const audioBlob = await response.blob();
+
+        // Create a URL for the blob
+        const blobUrl = URL.createObjectURL(audioBlob);
+
+        // Set up the download
+        a.href = blobUrl;
+        a.download = `${filename}.mp3`;
+        a.click();
+
+        // Clean up
+        setTimeout(() => {
+          URL.revokeObjectURL(blobUrl);
+          document.body.removeChild(a);
+        }, 100);
+
+        return true;
+      } catch (blobError) {
+        console.error('Error processing blob:', blobError);
+        throw new Error('Failed to process video data from blob URL');
+      }
+    } else {
+      // For regular URLs, use a direct download approach
+      try {
+        // Fetch the audio data directly
+        const response = await fetch(`${SERVER_URL}/api/extract-audio?videoPath=${encodeURIComponent(videoPath)}&filename=${encodeURIComponent(filename)}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ videoPath }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+        }
+
+        // Get the blob from the response
+        const audioBlob = await response.blob();
+
+        // Create a URL for the blob
+        const blobUrl = URL.createObjectURL(audioBlob);
+
+        // Set up the download
+        a.href = blobUrl;
+        a.download = `${filename}.mp3`;
+        a.click();
+
+        // Clean up
+        setTimeout(() => {
+          URL.revokeObjectURL(blobUrl);
+          document.body.removeChild(a);
+        }, 100);
+
+        return true;
+      } catch (downloadError) {
+        console.error('Error downloading audio:', downloadError);
+        throw new Error(`Failed to download audio: ${downloadError.message}`);
+      }
+    }
+  } catch (error) {
+    console.error('Error extracting audio:', error);
+    return false;
+  }
 };
