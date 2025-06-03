@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 export const useLyricsEditor = (initialLyrics, onUpdateLyrics) => {
   const [lyrics, setLyrics] = useState([]);
@@ -88,31 +88,25 @@ export const useLyricsEditor = (initialLyrics, onUpdateLyrics) => {
     }
   };
 
-  // Wrap handleRedo in useCallback to prevent it from changing on every render
-  const handleRedo = useEffect(() => {
-    // Create a function that will be stable across renders
-    const redoAction = () => {
-      if (redoStack.length > 0) {
-        // Get the current state and the last redo state
-        const currentState = JSON.parse(JSON.stringify(lyrics));
-        const redoState = redoStack[redoStack.length - 1];
+  // Use useCallback to prevent handleRedo from changing on every render
+  const handleRedo = useCallback(() => {
+    if (redoStack.length > 0) {
+      // Get the current state and the last redo state
+      const currentState = JSON.parse(JSON.stringify(lyrics));
+      const redoState = redoStack[redoStack.length - 1];
 
-        // Add current state to history
-        setHistory(prevHistory => [...prevHistory, currentState]);
+      // Add current state to history
+      setHistory(prevHistory => [...prevHistory, currentState]);
 
-        // Set lyrics to the redo state
-        setLyrics(redoState);
-        if (onUpdateLyrics) {
-          onUpdateLyrics(redoState);
-        }
-
-        // Remove the last state from redo stack
-        setRedoStack(prevRedoStack => prevRedoStack.slice(0, -1));
+      // Set lyrics to the redo state
+      setLyrics(redoState);
+      if (onUpdateLyrics) {
+        onUpdateLyrics(redoState);
       }
-    };
 
-    // Store the stable function for use in event listeners
-    return redoAction;
+      // Remove the last state from redo stack
+      setRedoStack(prevRedoStack => prevRedoStack.slice(0, -1));
+    }
   }, [redoStack, lyrics, onUpdateLyrics]);
 
   const handleReset = () => {
@@ -202,6 +196,17 @@ export const useLyricsEditor = (initialLyrics, onUpdateLyrics) => {
     if (onUpdateLyrics) {
       onUpdateLyrics(updatedLyrics);
     }
+
+    // Dispatch a custom event to notify that subtitle timings have changed
+    // This is used by the aligned narration component to auto-regenerate
+    window.dispatchEvent(new CustomEvent('subtitle-timing-changed', {
+      detail: {
+        index,
+        field,
+        newValue,
+        updatedLyrics
+      }
+    }));
   };
 
   const startDrag = (index, field, startX, startValue) => {
@@ -282,6 +287,15 @@ export const useLyricsEditor = (initialLyrics, onUpdateLyrics) => {
 
     // Reset the last updated value reference
     lastUpdatedValueRef.current = { index: -1, field: null, value: 0 };
+
+    // Dispatch a custom event to notify that subtitle timings have changed
+    // This is especially important after a drag operation completes
+    window.dispatchEvent(new CustomEvent('subtitle-timing-changed', {
+      detail: {
+        action: 'drag-end',
+        timestamp: Date.now()
+      }
+    }));
   };
 
   const isDragging = (index, field) =>
@@ -502,7 +516,7 @@ export const useLyricsEditor = (initialLyrics, onUpdateLyrics) => {
     return () => {
       window.removeEventListener('redo-action', handleRedoEvent);
     };
-  }, [redoStack, lyrics, handleRedo]);
+  }, [handleRedo]);
 
   // Function to update the saved lyrics state when the user saves the subtitles
   const updateSavedLyrics = () => {
