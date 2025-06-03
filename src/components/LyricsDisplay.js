@@ -6,7 +6,6 @@ import LyricItem from './lyrics/LyricItem';
 import LyricsHeader from './lyrics/LyricsHeader';
 import { useLyricsEditor } from '../hooks/useLyricsEditor';
 import { VariableSizeList as List } from 'react-window';
-import { convertToSRT } from '../utils/subtitleConverter';
 import { extractYoutubeVideoId } from '../utils/videoDownloader';
 import { downloadTXT, downloadSRT, downloadJSON } from '../utils/fileUtils';
 import { completeDocument, summarizeDocument } from '../services/geminiService';
@@ -85,14 +84,28 @@ const LyricsDisplay = ({
   videoTitle = 'subtitles' // Video title for download filenames
 }) => {
   const { t } = useTranslation();
-  const [zoom, setZoom] = useState(1);
+  // Initialize zoom with a function that calculates the minimum zoom based on duration
+  const [zoom, setZoom] = useState(() => {
+    // Try to get the duration from the video element if it exists
+    const videoElement = document.querySelector('video');
+    if (videoElement && videoElement.duration && !isNaN(videoElement.duration)) {
+      // Calculate minimum zoom based on duration
+      const minZoom = videoElement.duration <= 300 ? 1 : videoElement.duration / 300;
+      return minZoom;
+    }
+    // Default to 1 if we can't determine the duration yet
+    return 1;
+  });
   const [panOffset, setPanOffset] = useState(0);
   const [centerTimelineAt, setCenterTimelineAt] = useState(null);
   const rowHeights = useRef({});
   const [txtContent, setTxtContent] = useState(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processedDocument, setProcessedDocument] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [splitDuration, setSplitDuration] = useState(() => {
+    // Get the split duration from localStorage or use default (0 = no split)
+    return parseInt(localStorage.getItem('consolidation_split_duration') || '0');
+  });
+  const [consolidationStatus, setConsolidationStatus] = useState('');
   const [showWaveform, setShowWaveform] = useState(() => {
     // Load from localStorage, default to true if not set
     return localStorage.getItem('show_waveform') !== 'false';
@@ -130,6 +143,20 @@ const LyricsDisplay = ({
     }
   }, [matchedLyrics]);
 
+  // Update zoom level when duration changes
+  useEffect(() => {
+    if (duration) {
+      // Calculate minimum zoom based on duration
+      const minZoom = duration <= 300 ? 1 : duration / 300;
+
+      // Only update if the current zoom is less than the minimum
+      if (zoom < minZoom) {
+
+        setZoom(minZoom);
+      }
+    }
+  }, [duration, zoom]);
+
   // Listen for changes to the show_waveform setting in localStorage
   useEffect(() => {
     const handleStorageChange = (event) => {
@@ -144,6 +171,31 @@ const LyricsDisplay = ({
       window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
+
+  // Listen for consolidation status updates
+  useEffect(() => {
+    const handleConsolidationStatus = (event) => {
+      if (event.detail && event.detail.message) {
+        setConsolidationStatus(event.detail.message);
+
+        // Check if this is a completion message
+        if (event.detail.message.includes('Processing completed for all')) {
+          // Clear the status after a delay
+          setTimeout(() => {
+            setConsolidationStatus('');
+          }, 3000);
+        }
+      }
+    };
+
+    window.addEventListener('consolidation-status', handleConsolidationStatus);
+
+    return () => {
+      window.removeEventListener('consolidation-status', handleConsolidationStatus);
+    };
+  }, []);
+
+  // Gemini effects for the Download Center button have been removed to reduce lag
 
   const {
     lyrics,
@@ -171,8 +223,10 @@ const LyricsDisplay = ({
   // Find current lyric index based on time
   const currentIndex = lyrics.findIndex((lyric, index) => {
     const nextLyric = lyrics[index + 1];
+    // If there's a next lyric, use the middle point between current lyric's end and next lyric's start
+    // Otherwise, use the current lyric's end time
     return currentTime >= lyric.start &&
-      (nextLyric ? currentTime < nextLyric.start : currentTime <= lyric.end);
+      (nextLyric ? currentTime < (lyric.end + (nextLyric.start - lyric.end) / 2) : currentTime <= lyric.end);
   });
 
   // Reference to the virtualized list
@@ -221,8 +275,11 @@ const LyricsDisplay = ({
   };
 
   // Handle process request from modal
-  const handleProcess = async (source, processType, model) => {
+  const handleProcess = async (source, processType, model, splitDurationParam, customPrompt) => {
     const subtitlesToUse = source === 'translated' ? translatedSubtitles : lyrics;
+
+    // Store the current source in localStorage for language detection
+    localStorage.setItem('current_processing_source', source);
 
     if (!subtitlesToUse || subtitlesToUse.length === 0) return;
 
@@ -233,16 +290,64 @@ const LyricsDisplay = ({
       setTxtContent(textContent);
     }
 
-    setIsProcessing(true);
+    // Use the provided split duration or the state value
+    const splitDurationToUse = splitDurationParam !== undefined ? splitDurationParam : splitDuration;
+
+    // Save the split duration setting to localStorage
+    localStorage.setItem('consolidation_split_duration', splitDurationToUse.toString());
+
+    // Update the state
+    setSplitDuration(splitDurationToUse);
+
+    // Clear any previous status
+    setConsolidationStatus('');
+
     try {
       let result;
       if (processType === 'consolidate') {
-        result = await completeDocument(textContent, model);
+        result = await completeDocument(textContent, model, customPrompt, splitDurationToUse);
       } else if (processType === 'summarize') {
-        result = await summarizeDocument(textContent, model);
+        result = await summarizeDocument(textContent, model, customPrompt);
       }
 
-      setProcessedDocument(result);
+      // Check if the result is JSON and extract plain text
+      if (result && typeof result === 'string' && (result.trim().startsWith('{') || result.trim().startsWith('['))) {
+        try {
+          const jsonResult = JSON.parse(result);
+
+
+          // For summarize feature
+          if (jsonResult.summary) {
+            let plainText = jsonResult.summary;
+
+            // Add key points if available
+            if (jsonResult.keyPoints && Array.isArray(jsonResult.keyPoints) && jsonResult.keyPoints.length > 0) {
+              plainText += '\n\nKey Points:\n';
+              jsonResult.keyPoints.forEach((point, index) => {
+                plainText += `\n${index + 1}. ${point}`;
+              });
+            }
+
+            result = plainText;
+
+          }
+          // For consolidate feature
+          else if (jsonResult.content) {
+            result = jsonResult.content;
+
+          }
+          // For any other JSON structure
+          else if (jsonResult.text) {
+            result = jsonResult.text;
+
+          }
+        } catch (e) {
+
+          // Keep the original result if parsing fails
+        }
+      }
+
+      // Result is ready for download
 
       // Show a temporary success message
       const successMessage = document.createElement('div');
@@ -265,8 +370,11 @@ const LyricsDisplay = ({
       downloadFile(result, filename);
     } catch (error) {
       console.error(`Error ${processType === 'consolidate' ? 'completing' : 'summarizing'} document:`, error);
+
+      // Show error status
+      setConsolidationStatus(t('consolidation.error', 'Error processing document: {{message}}', { message: error.message }));
     } finally {
-      setIsProcessing(false);
+      // Processing is complete
     }
   };
 
@@ -288,29 +396,42 @@ const LyricsDisplay = ({
 
       if (!cacheId) {
         console.error('No cache ID found for current media');
-        console.log('Debug info - localStorage values:', {
-          currentVideoUrl,
-          currentFileUrl,
-          currentFileCacheId: localStorage.getItem('current_file_cache_id')
-        });
+
         return;
       }
 
+      // Check if we have latest segment subtitles in localStorage
+      let subtitlesToSave = lyrics;
+      try {
+        const latestSubtitles = localStorage.getItem('latest_segment_subtitles');
+        if (latestSubtitles) {
+          const parsedSubtitles = JSON.parse(latestSubtitles);
+          if (Array.isArray(parsedSubtitles) && parsedSubtitles.length > 0) {
+
+            subtitlesToSave = parsedSubtitles;
+            // Clear the localStorage entry to avoid using it again
+            localStorage.removeItem('latest_segment_subtitles');
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing latest subtitles from localStorage:', e);
+      }
+
       // Save to cache
-      const response = await fetch('http://localhost:3004/api/save-subtitles', {
+      const response = await fetch('http://localhost:3007/api/save-subtitles', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           cacheId,
-          subtitles: lyrics
+          subtitles: subtitlesToSave
         })
       });
 
       const result = await response.json();
       if (result.success) {
-        console.log('Subtitles saved successfully');
+
         // Show a temporary success message
         const saveMessage = document.createElement('div');
         saveMessage.className = 'save-success-message';
@@ -329,8 +450,23 @@ const LyricsDisplay = ({
 
         // Call the callback if provided to update parent component state
         if (onSaveSubtitles) {
-          onSaveSubtitles(lyrics);
+          onSaveSubtitles(subtitlesToSave);
         }
+
+        // Dispatch custom events to notify that subtitles have been saved
+        // These are used by various components including segment retry and aligned narration
+        window.dispatchEvent(new CustomEvent('subtitles-saved', {
+          detail: { success: true }
+        }));
+
+        // Also dispatch a subtitle-timing-changed event for the aligned narration component
+        window.dispatchEvent(new CustomEvent('subtitle-timing-changed', {
+          detail: {
+            action: 'save',
+            timestamp: Date.now(),
+            subtitles: subtitlesToSave
+          }
+        }));
       } else {
         console.error('Failed to save subtitles:', result.error);
       }
@@ -473,8 +609,16 @@ const LyricsDisplay = ({
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
-            <span>{t('download.downloadOptions', 'Download & Process')}</span>
+            <span>{t('download.downloadCenter', 'Download Center')}</span>
           </button>
+
+          {/* Show consolidation status if available */}
+          {consolidationStatus && (
+            <div className="consolidation-status">
+              <div className="status-spinner"></div>
+              <span>{consolidationStatus}</span>
+            </div>
+          )}
 
           {/* Download Options Modal */}
           <DownloadOptionsModal
