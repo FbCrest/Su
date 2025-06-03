@@ -1538,7 +1538,7 @@ const SettingsModal = ({ onClose, onSave, apiKeysSet, setApiKeysSet }) => {
             <div className="settings-section about-section">
               <h3>{t('settings.about', 'About')}</h3>
               <div className="about-content">
-                <h2 className="app-title">One-click Subtitles Generator</h2>
+                <h1>One-click Subtitles Generator</h1>
                 <div className="creator-info">
                   <p><strong>{t('settings.creator', 'Creator')}:</strong> Sú</p>
                   <p>
