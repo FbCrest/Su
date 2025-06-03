@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { FiClock, FiX } from 'react-icons/fi';
 import { addYoutubeUrlToHistory, getYoutubeUrlHistory, clearYoutubeUrlHistory, formatTimestamp } from '../../utils/historyUtils';
 import { getVideoDetails } from '../../services/youtubeApiService';
-import QualitySelector from './QualitySelector';
 
 const YoutubeUrlInput = ({ setSelectedVideo, selectedVideo, className }) => {
   const { t } = useTranslation();
@@ -89,6 +88,8 @@ const YoutubeUrlInput = ({ setSelectedVideo, selectedVideo, className }) => {
       const videoId = extractVideoId(url);
       if (videoId) {
         const title = await fetchVideoTitle(videoId) || 'YouTube Video';
+        // Store the video URL in localStorage to maintain state
+        localStorage.setItem('current_video_url', url);
         setSelectedVideo({
           id: videoId,
           url: url,
@@ -99,6 +100,8 @@ const YoutubeUrlInput = ({ setSelectedVideo, selectedVideo, className }) => {
       }
     } else {
       setSelectedVideo(null);
+      // Clear the video URL from localStorage
+      localStorage.removeItem('current_video_url');
     }
   };
 
@@ -164,6 +167,8 @@ const YoutubeUrlInput = ({ setSelectedVideo, selectedVideo, className }) => {
               setUrl('');
               setSelectedVideo(null);
               setError('');
+              // Also clear the video URL from localStorage
+              localStorage.removeItem('current_video_url');
             }}
             aria-label="Clear input"
           >
@@ -226,20 +231,17 @@ const YoutubeUrlInput = ({ setSelectedVideo, selectedVideo, className }) => {
       )}
 
       {!selectedVideo && (
-        <div className="youtube-instructions">
-          <h3>{t('youtubeUrlInput.instructionsTitle', 'How to use')}</h3>
-          <ol>
-            <li>{t('youtubeUrlInput.instructionsStep1', 'Find a YouTube video you want to generate subtitles for')}</li>
-            <li>{t('youtubeUrlInput.instructionsStep2', 'Copy the URL from your browser address bar')}</li>
-            <li>{t('youtubeUrlInput.instructionsStep3', 'Paste the URL above')}</li>
-          </ol>
-
-          <h4>{t('youtubeUrlInput.examplesTitle', 'Supported URL formats:')}</h4>
-          <ul className="url-examples">
-            <li>{t('youtubeUrlInput.example1', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ')}</li>
-            <li>{t('youtubeUrlInput.example2', 'https://youtu.be/dQw4w9WgXcQ')}</li>
-            <li>{t('youtubeUrlInput.example3', 'youtube.com/watch?v=dQw4w9WgXcQ')}</li>
-          </ul>
+        <div className="youtube-instructions-container">
+          <div className="youtube-instructions-row">
+            <div className="youtube-instructions-col">
+              <h4>{t('youtubeUrlInput.examplesTitle', 'Supported URL formats:')}</h4>
+              <ul>
+                <li>{t('youtubeUrlInput.example1', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ')}</li>
+                <li>{t('youtubeUrlInput.example2', 'https://youtu.be/dQw4w9WgXcQ')}</li>
+                <li>{t('youtubeUrlInput.example3', 'youtube.com/watch?v=dQw4w9WgXcQ')}</li>
+              </ul>
+            </div>
+          </div>
         </div>
       )}
 
@@ -257,16 +259,7 @@ const YoutubeUrlInput = ({ setSelectedVideo, selectedVideo, className }) => {
             </div>
           </div>
 
-          {/* Quality selector */}
-          <QualitySelector
-            onChange={(quality) => {
-              // Update the selected video with the quality
-              setSelectedVideo(prev => ({
-                ...prev,
-                quality
-              }));
-            }}
-          />
+
         </>
       )}
     </div>

@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { FiClock, FiSearch, FiX } from 'react-icons/fi';
 import { searchYouTubeVideos, isOAuthEnabled, hasValidTokens } from '../../services/youtubeApiService';
 import { addSearchQueryToHistory, getSearchQueryHistory, clearSearchQueryHistory, formatTimestamp } from '../../utils/historyUtils';
-import QualitySelector from './QualitySelector';
 
 const YoutubeSearchInput = ({ apiKeysSet = { youtube: false }, selectedVideo, setSelectedVideo, className }) => {
   const { t } = useTranslation();
@@ -62,6 +61,25 @@ const YoutubeSearchInput = ({ apiKeysSet = { youtube: false }, selectedVideo, se
           setError(t('youtube.authError', 'YouTube authentication required. Please set up OAuth in settings.'));
         } else if (error.message.includes('quota exceeded')) {
           setError(t('errors.quotaExceeded', 'Quota exceeded, please wait tomorrow, or create a new Google Cloud project and update API or OAuth.'));
+        } else if (error.message.includes('api not enabled')) {
+          setError(t('errors.youtubeApiNotEnabled', 'YouTube Data API v3 is not enabled in your Google Cloud project. Please enable it by visiting the Google Cloud Console and enabling the YouTube Data API v3 service.'));
+          // Add a button to open the Google Cloud Console API Library
+          const apiEnableUrl = 'https://console.developers.google.com/apis/api/youtube.googleapis.com/overview';
+          setError(
+            <>
+              {t('errors.youtubeApiNotEnabled', 'YouTube Data API v3 is not enabled in your Google Cloud project.')}
+              <div className="error-action">
+                <a
+                  href={apiEnableUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="error-action-button"
+                >
+                  {t('settings.enableYouTubeAPI', 'Enable YouTube Data API v3')}
+                </a>
+              </div>
+            </>
+          );
         } else {
           setError(t('youtube.searchError', 'Error searching YouTube. Please try again or enter a URL directly.'));
         }
@@ -71,6 +89,24 @@ const YoutubeSearchInput = ({ apiKeysSet = { youtube: false }, selectedVideo, se
           setError(t('youtube.noApiKey', 'Please set your YouTube API key in the settings first.'));
         } else if (error.message.includes('quota exceeded')) {
           setError(t('errors.quotaExceeded', 'Quota exceeded, please wait tomorrow, or create a new Google Cloud project and update API or OAuth.'));
+        } else if (error.message.includes('api not enabled')) {
+          // Add a button to open the Google Cloud Console API Library
+          const apiEnableUrl = 'https://console.developers.google.com/apis/api/youtube.googleapis.com/overview';
+          setError(
+            <>
+              {t('errors.youtubeApiNotEnabled', 'YouTube Data API v3 is not enabled in your Google Cloud project.')}
+              <div className="error-action">
+                <a
+                  href={apiEnableUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="error-action-button"
+                >
+                  {t('settings.enableYouTubeAPI', 'Enable YouTube Data API v3')}
+                </a>
+              </div>
+            </>
+          );
         } else {
           setError(t('youtube.searchError', 'Error searching YouTube. Please try again or enter a URL directly.'));
         }
@@ -143,13 +179,9 @@ const YoutubeSearchInput = ({ apiKeysSet = { youtube: false }, selectedVideo, se
     // Clear any existing file URLs when selecting a YouTube video
     localStorage.removeItem('current_file_url');
 
-    // Get the default quality from localStorage
-    const quality = localStorage.getItem('youtube_download_quality') || '360p';
-
-    // Add quality to the video object
+    // Set the selected video
     setSelectedVideo({
-      ...video,
-      quality
+      ...video
     });
   };
 
@@ -276,18 +308,7 @@ const YoutubeSearchInput = ({ apiKeysSet = { youtube: false }, selectedVideo, se
                 </div>
               </div>
 
-              {/* Show quality selector for selected video */}
-              {selectedVideo?.id === video.id && (
-                <QualitySelector
-                  onChange={(quality) => {
-                    // Update the selected video with the quality
-                    setSelectedVideo(prev => ({
-                      ...prev,
-                      quality
-                    }));
-                  }}
-                />
-              )}
+
             </div>
           ))
         )}
