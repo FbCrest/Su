@@ -4,7 +4,10 @@
 
 import { callGeminiApi, getProcessingForceStopped } from './geminiService';
 import { fetchSegment } from '../utils/videoSplitter';
-import { parseRawTextManually } from '../utils/subtitleParser';
+import { parseRawTextManually } from '../utils/subtitle';
+import { getTranscriptionRules } from '../utils/transcriptionRulesStore';
+import { API_BASE_URL } from '../config';
+import { getMaxSegmentDurationSeconds } from '../utils/durationUtils';
 
 /**
  * Process a single media segment (video or audio)
@@ -17,7 +20,9 @@ import { parseRawTextManually } from '../utils/subtitleParser';
  * @param {string} mediaType - Type of media ('video' or 'audio')
  * @returns {Promise<Array>} - Array of subtitle objects with adjusted timestamps
  */
-export async function processSegment(segment, segmentIndex, startTime, segmentCacheId, onStatusUpdate, t, mediaType = 'video') {
+export async function processSegment(segment, segmentIndex, startTime, segmentCacheId, onStatusUpdate, t, mediaType = 'video', options = {}) {
+    // Extract options
+    const { userProvidedSubtitles } = options;
     let retryCount = 0;
     const maxRetries = 3;
     let success = false;
@@ -32,7 +37,7 @@ export async function processSegment(segment, segmentIndex, startTime, segmentCa
     while (!success && retryCount < maxRetries) {
         // Check if processing has been force stopped
         if (getProcessingForceStopped()) {
-            console.log(`Segment ${segmentIndex+1} processing was force stopped, aborting retries`);
+
             throw new Error('Processing was force stopped');
         }
         try {
@@ -40,26 +45,98 @@ export async function processSegment(segment, segmentIndex, startTime, segmentCa
             const segmentFile = await fetchSegment(segment.url, segmentIndex, mediaType);
 
             // Log the segment file details
-            console.log(`Processing ${mediaType} segment ${segmentIndex+1}:`, {
-                name: segmentFile.name,
-                type: segmentFile.type,
-                size: segmentFile.size
-            });
+
+
+            // Only get transcription rules if we're not using user-provided subtitles
+            if (!userProvidedSubtitles) {
+                // Get transcription rules from localStorage
+                const transcriptionRules = getTranscriptionRules();
+                if (transcriptionRules) {
+
+                } else {
+
+                }
+            } else {
+
+            }
 
             // Process the segment with Gemini
-            segmentSubtitles = await callGeminiApi(segmentFile, 'file-upload');
+
+
+            // Get the total duration from the parent if available
+            const totalDuration = options.totalDuration || null;
+
+            // Create segment info for the prompt
+            const segmentInfo = {
+                isSegment: true,
+                segmentIndex,
+                startTime,
+                duration: segment.duration,
+                totalDuration
+            };
+
+            // Pass segment info to callGeminiApi
+            segmentSubtitles = await callGeminiApi(segmentFile, 'file-upload', {
+                userProvidedSubtitles,
+                segmentInfo
+            });
             success = true;
         } catch (error) {
-            retryCount++;
-            console.error(`Error processing segment ${segmentIndex+1}, attempt ${retryCount}:`, error);
+            console.error(`Error processing segment ${segmentIndex+1}, attempt ${retryCount+1}:`, error);
 
-            // Check for 503 error
-            if (error.message && (
-                (error.message.includes('503') && error.message.includes('Service Unavailable')) ||
-                error.message.includes('The model is overloaded')
-            )) {
-                // If we hit a 503 error, throw it with segment information
-                throw new Error(`Segment ${segmentIndex+1}: ${t('errors.geminiOverloaded')}`);
+            // Log the error message and status code for debugging
+
+
+
+            // More aggressive detection of overload errors
+            const isOverloadError =
+                error.isOverloaded ||
+                (error.message && (
+                    error.message.includes('503') ||
+                    error.message.includes('Service Unavailable') ||
+                    error.message.includes('overloaded') ||
+                    error.message.includes('UNAVAILABLE') ||
+                    error.message.includes('Status code: 503')
+                ));
+
+            if (isOverloadError) {
+
+
+                // Update segment status to show "Quá tải" instead of "Thất bại"
+                // Get the time range for this segment
+                const startTime = segment.startTime !== undefined ? segment.startTime : segmentIndex * getMaxSegmentDurationSeconds();
+                const segmentDuration = segment.duration !== undefined ? segment.duration : getMaxSegmentDurationSeconds();
+                const endTime = startTime + segmentDuration;
+
+                // Format time range for display
+                const formatTime = (seconds) => {
+                    const mins = Math.floor(seconds / 60);
+                    const secs = Math.floor(seconds % 60);
+                    return `${mins}:${secs.toString().padStart(2, '0')}`;
+                };
+                const timeRange = `${formatTime(startTime)} - ${formatTime(endTime)}`;
+
+                // Update segment status with the time range
+                updateSegmentStatus(
+                    segmentIndex,
+                    'overloaded',
+                    t('errors.geminiOverloaded', 'Mô hình đang quá tải. Vui lòng thử lại sau.'),
+                    t,
+                    timeRange
+                );
+
+                // If we hit an overload error, stop retrying and throw the error
+                const overloadError = new Error(`Segment ${segmentIndex+1}: ${t('errors.geminiOverloaded', 'Mô hình đang quá tải. Vui lòng thử lại sau.')}`);
+                overloadError.isOverloaded = true;
+                throw overloadError;
+            }
+
+            // Check if this is an empty response (empty JSON array)
+            if (error.message && error.message.includes('Unrecognized subtitle format') &&
+                error.message.includes('rawText":"[]"')) {
+
+                // Return empty array instead of retrying
+                return [];
             }
 
             // Check for token limit error
@@ -68,9 +145,10 @@ export async function processSegment(segment, segmentIndex, startTime, segmentCa
                 throw new Error(`Token limit exceeded for segment ${segmentIndex+1}. Please try with a shorter video segment or lower video quality.`);
             }
 
-            // Check for unrecognized format error
+            // Check for unrecognized format error or empty subtitles
             try {
                 const errorData = JSON.parse(error.message);
+
                 if (errorData.type === 'unrecognized_format') {
                     // Extract the raw text from the error
                     const rawText = errorData.rawText;
@@ -79,15 +157,27 @@ export async function processSegment(segment, segmentIndex, startTime, segmentCa
                     const manualSubtitles = parseRawTextManually(rawText, startTime);
 
                     if (manualSubtitles && manualSubtitles.length > 0) {
-                        console.log(`Manually parsed ${manualSubtitles.length} subtitles from segment ${segmentIndex+1}`);
+
                         segmentSubtitles = manualSubtitles;
                         success = true;
                         break; // Exit the retry loop, we've handled it
                     }
                 }
+
+                // Handle the case where all subtitles are empty
+                if (errorData.type === 'empty_subtitles') {
+
+                    // Return an empty array for this segment
+                    segmentSubtitles = [];
+                    success = true;
+                    break; // Exit the retry loop, we've handled it
+                }
             } catch (parseError) {
                 console.error('Error parsing error message:', parseError);
             }
+
+            // Increment retry count
+            retryCount++;
 
             if (retryCount >= maxRetries) {
                 throw new Error(`Failed to process segment ${segmentIndex+1} after ${maxRetries} attempts`);
@@ -107,7 +197,7 @@ export async function processSegment(segment, segmentIndex, startTime, segmentCa
     // Cache the segment results
     if (success && segmentSubtitles) {
         try {
-            await fetch('http://localhost:3004/api/save-subtitles', {
+            await fetch(`${API_BASE_URL}/save-subtitles`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -128,20 +218,24 @@ export async function processSegment(segment, segmentIndex, startTime, segmentCa
         throw new Error(`Failed to process segment ${segmentIndex+1}`);
     }
 
+    // Handle the case where the API returned an empty array (no speech in segment)
+    if (Array.isArray(segmentSubtitles) && segmentSubtitles.length === 0) {
+
+        // Continue processing with an empty array
+    }
+
     // Get the actual segment duration and start time if available
     const segmentDuration = segment.duration !== undefined ? segment.duration : null;
 
     // Log detailed information about this segment
-    console.log(`Adjusting timestamps for segment ${segmentIndex+1}:`);
-    console.log(`  Start time: ${startTime.toFixed(2)}s`);
+
+
     if (segmentDuration) {
-        console.log(`  Duration: ${segmentDuration.toFixed(2)}s`);
-        console.log(`  End time: ${(startTime + segmentDuration).toFixed(2)}s`);
+
+
     }
 
-    // Log the original timestamps for debugging
-    console.log(`  Original timestamps (first 3 subtitles):`,
-        segmentSubtitles.slice(0, 3).map(s => `${s.start.toFixed(2)}-${s.end.toFixed(2)}: ${s.text.substring(0, 20)}...`));
+
 
     // Adjust timestamps based on segment start time
     const adjustedSubtitles = segmentSubtitles.map(subtitle => {
@@ -156,10 +250,7 @@ export async function processSegment(segment, segmentIndex, startTime, segmentCa
         };
     });
 
-    // Log the adjusted timestamps for debugging
-    console.log(`  Adjusted timestamps (first 3 subtitles):`,
-        adjustedSubtitles.slice(0, 3).map(s => `${s.start.toFixed(2)}-${s.end.toFixed(2)}: ${s.text.substring(0, 20)}...`));
-    console.log(`  Total subtitles in segment: ${adjustedSubtitles.length}`);
+
 
     return adjustedSubtitles;
 }
@@ -173,18 +264,27 @@ export async function processSegment(segment, segmentIndex, startTime, segmentCa
  * @param {string} timeRange - Time range for the segment (optional)
  */
 export const updateSegmentStatus = (index, status, message, t, timeRange = null) => {
+    // Make sure we have a valid translation function
+    const translate = typeof t === 'function' ? t : (_, defaultValue) => defaultValue;
+
+    // Log the status update for debugging
+
+
+    // Remove debug translation logs to prevent console spam
+
     // Create the status object
     const segmentStatus = {
         index,
         status,
         message,
         timeRange,
-        shortMessage: status === 'loading' ? t('output.processing') :
-                     status === 'success' ? t('output.done') :
-                     status === 'error' ? t('output.failed') :
-                     status === 'cached' ? t('output.cached') :
-                     status === 'pending' ? t('output.pending') :
-                     status === 'retrying' ? t('output.retrying', 'Retrying...') : ''
+        shortMessage: status === 'loading' ? translate('output.processing', 'Processing') :
+                     status === 'success' ? translate('output.done', 'Done') :
+                     status === 'error' ? translate('output.failed', 'Failed') :
+                     status === 'overloaded' ? translate('output.overloaded', 'Overloaded') :
+                     status === 'cached' ? translate('output.cached', 'Cached') :
+                     status === 'pending' ? translate('output.pending', 'Pending') :
+                     status === 'retrying' ? translate('output.retrying', 'Retrying...') : ''
     };
 
     // Dispatch event to update UI
