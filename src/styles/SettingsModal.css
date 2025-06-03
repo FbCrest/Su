@@ -8,6 +8,7 @@
 @import './settings/appearance.css';
 @import './settings/api-key.css';
 @import './settings/video-processing.css';
+@import './settings/video-processing-redesign.css'; /* Import redesigned video processing styles */
 @import './settings/cache.css';
 @import './settings/prompts.css';
 @import './settings/prompt-presets.css';
@@ -17,5 +18,6 @@
 @import './settings/responsive.css';
 @import './settings/scrollbar-fix.css'; /* Import the scrollbar fix */
 @import './settings/oauth.css'; /* Import OAuth styles */
+@import './settings/gemini-paused-message.css'; /* Import Gemini paused message styles */
 @import './settings/translation-language-input.css'; /* Import translation language input styles */
 @import './settings/about.css'; /* Import About tab styles */

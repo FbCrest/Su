@@ -16,7 +16,7 @@
   font-size: var(--md-label-large-size);
   line-height: var(--md-label-large-height);
   font-weight: var(--md-label-large-weight);
-  font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-title);
   cursor: pointer;
   transition: box-shadow var(--md-duration-medium2) var(--md-easing-standard),
               background-color var(--md-duration-medium2) var(--md-easing-standard),
@@ -26,6 +26,12 @@
   position: relative;
   overflow: hidden;
   height: 52px; /* Match the height of other buttons */
+}
+
+/* Ensure all text inside the button uses the title font */
+.srt-upload-button *,
+.srt-upload-button span {
+  font-family: var(--font-title) !important;
 }
 
 /* State layer for hover effect */
@@ -42,7 +48,7 @@
 }
 
 .srt-upload-button:hover::before {
-  background-color: rgba(255, 255, 255, var(--md-state-hover-opacity));
+  background-color: transparent !important;
 }
 
 .srt-upload-button:active::before {
@@ -52,6 +58,9 @@
 .srt-upload-button:hover {
   transform: translateY(-2px);
   box-shadow: var(--md-elevation-level3);
+  background-color: transparent !important;
+  color: var(--md-secondary); /* Use secondary color for text on hover for better readability */
+  text-shadow: none; /* Remove any text shadow on hover */
 }
 
 .srt-upload-button:active {
@@ -79,6 +88,28 @@
   z-index: 1;
 }
 
+/* Ensure mini icons don't have any filter or glow effects */
+.srt-upload-button .gemini-mini-icon {
+  filter: none !important;
+  box-shadow: none !important;
+  background: none !important;
+}
+
+/* Allow SVG filters for star-like glow effects */
+.srt-upload-button .gemini-mini-icon svg,
+.srt-upload-button .gemini-mini-icon svg path {
+  /* Allow SVG filters but prevent CSS filters */
+  box-shadow: none !important;
+  -webkit-filter: none !important;
+  /* Add a subtle animation */
+  animation: srt-btn-star-twinkle 3s infinite alternate ease-in-out;
+}
+
+@keyframes srt-btn-star-twinkle {
+  0% { opacity: 0.9; }
+  100% { opacity: 1; }
+}
+
 /* Processing state */
 .srt-upload-button.processing {
   position: relative;
@@ -99,14 +130,14 @@
 
 @keyframes pulse-glow {
   0% {
-    transform: scale(0.5);
+    transform: scale(0.8);
     opacity: 0;
   }
   50% {
-    opacity: 0.3;
+    opacity: 0.2;
   }
   100% {
-    transform: scale(1.2);
+    transform: scale(1.0);
     opacity: 0;
   }
 }

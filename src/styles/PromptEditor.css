@@ -93,10 +93,53 @@
   background-color: var(--md-on-surface-variant);
 }
 
-/* Prompt editor container for positioning the floating cards */
+/* Prompt editor container */
 .prompt-editor-container {
   position: relative;
   margin-top: 0.5rem;
+}
+
+/* Default template box */
+.prompt-editor-default-template {
+  margin-top: 16px;
+}
+
+.default-template-box {
+  background-color: var(--md-surface-2);
+  padding: 16px;
+  border-radius: var(--md-shape-medium);
+  border-left: 4px solid var(--md-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--md-on-surface-variant);
+}
+
+.default-template-box p {
+  margin: 4px 0;
+}
+
+.variable-highlight {
+  color: var(--md-primary);
+  font-weight: 500;
+  background-color: rgba(var(--md-primary-rgb), 0.1);
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.custom-instructions-placeholder {
+  color: var(--md-outline);
+  font-style: italic;
+  padding-left: 16px;
+  border-left: 2px dashed var(--md-outline);
+  margin: 8px 0 8px 8px !important;
+}
+
+.instructions-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--md-on-surface);
 }
 
 .prompt-editor-description {
@@ -112,12 +155,12 @@
   border-radius: var(--md-shape-medium);
   background-color: var(--md-surface);
   color: var(--md-on-surface);
-  font-family: 'Roboto Mono', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: var(--md-body-medium-size);
   line-height: 1.5;
   resize: vertical;
-  min-height: 200px;
-  height: 200px;
+  min-height: 150px;
+  height: 150px;
   scrollbar-width: thin;
   scrollbar-color: var(--md-primary) var(--md-surface-2);
 }
@@ -187,7 +230,7 @@
   background-color: var(--md-surface-3);
   padding: 2px 4px;
   border-radius: 4px;
-  font-family: 'Roboto Mono', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: var(--md-tertiary);
   margin: 0 4px;
 }
@@ -277,6 +320,7 @@
   gap: 8px;
   font-size: var(--md-label-medium-size);
   font-weight: var(--md-label-medium-weight);
+  font-family: 'Open Sans', sans-serif;
   transition: background-color 0.2s, color 0.2s, transform 0.2s, box-shadow 0.2s;
 }
 
@@ -337,7 +381,7 @@
 }
 
 .variable-text, .variable-label {
-  font-family: 'Roboto Mono', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 0.9rem;
   color: var(--md-primary);
   font-weight: 500;
@@ -409,4 +453,39 @@
 
 .prompt-editor-actions .primary-button:hover {
   background-color: color-mix(in srgb, var(--md-primary), black 10%);
+}
+
+/* Examples section */
+.prompt-editor-examples {
+  background-color: var(--md-surface-2);
+  padding: 16px;
+  border-radius: var(--md-shape-medium);
+  border-left: 4px solid var(--md-secondary);
+  margin-top: 8px;
+}
+
+.prompt-editor-examples h4 {
+  margin: 0 0 8px 0;
+  font-size: var(--md-title-small-size);
+  font-weight: var(--md-title-small-weight);
+  color: var(--md-on-surface);
+}
+
+.prompt-editor-examples ul {
+  margin: 0;
+  padding-left: 24px;
+}
+
+.prompt-editor-examples li {
+  margin-bottom: 4px;
+  color: var(--md-on-surface-variant);
+}
+
+.prompt-editor-note {
+  margin: 12px 0 0 0;
+  padding: 8px;
+  background-color: var(--md-surface-3);
+  border-radius: var(--md-shape-small);
+  font-size: var(--md-body-small-size);
+  color: var(--md-on-surface-variant);
 }

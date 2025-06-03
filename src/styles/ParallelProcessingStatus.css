@@ -33,19 +33,27 @@
   z-index: 0;
 }
 
-/* Material Design 3 typography for header - enhanced styling */
-.segments-status h4 {
+/* Segments status header with title and rules button */
+.segments-status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-top: 0;
   margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--md-outline-variant);
+  position: relative;
+  z-index: 1;
+}
+
+/* Material Design 3 typography for header - enhanced styling */
+.segments-status-header h4 {
+  margin: 0;
   font-size: var(--md-title-medium-size);
   line-height: var(--md-title-medium-height);
   font-weight: var(--md-title-medium-weight);
   color: var(--md-on-surface);
   transition: color var(--transition-speed);
-  position: relative;
-  z-index: 1;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--md-outline-variant);
 }
 
 /* Material Design 3 grid layout - enhanced styling */
@@ -96,6 +104,7 @@
   transition: none !important; /* Remove transition to prevent layout shifts */
   pointer-events: none; /* Ensure it doesn't block clicks */
   z-index: 1; /* Keep it below interactive elements */
+  border-radius: var(--md-shape-medium); /* Match the border-radius of the parent element */
 }
 
 .segment-status:hover::after {
@@ -166,6 +175,10 @@
   background-color: var(--error-color);
 }
 
+.segment-status.overloaded .segment-indicator {
+  background-color: var(--warning-color);
+}
+
 .segment-status.warning .segment-indicator {
   background-color: var(--warning-color);
 }
@@ -230,48 +243,10 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-/* Container for model retry dropdown */
+/* Container for model retry button */
 .model-retry-dropdown-container {
   position: relative;
   margin-left: 4px;
-  /* Ensure the container has the correct positioning context */
-  z-index: 100;
-}
-
-/* When dropdown is open, ensure container has higher z-index */
-.model-dropdown-open .model-retry-dropdown-container {
-  z-index: 99999; /* Match the dropdown z-index */
-}
-
-/* Dropdown icon */
-.dropdown-icon {
-  margin-left: 2px;
-  font-size: 10px;
-}
-
-/* Model dropdown menu */
-.model-dropdown {
-  position: fixed;
-  width: 280px;
-  background-color: var(--md-surface-2);
-  border-radius: var(--md-shape-medium);
-  box-shadow: var(--md-elevation-level3);
-  border: 1px solid var(--md-outline-variant);
-  z-index: 99999; /* Very high z-index to ensure it's above everything */
-  overflow: hidden;
-  /* Add animation for smooth appearance */
-  animation: dropdown-appear 0.2s var(--md-easing-emphasized) forwards;
-}
-
-@keyframes dropdown-appear {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 /* Dropdown header */
@@ -284,7 +259,7 @@
   background-color: var(--md-surface-3);
 }
 
-/* Base styles for segment retry button */
+/* Base styles for segment retry button - works for both button and div with role="button" */
 .segment-retry-btn {
   cursor: pointer !important;
   padding: 6px;
@@ -306,9 +281,17 @@
   flex-shrink: 0;
   /* Prevent any transitions that might cause layout shifts */
   transition: none !important;
+  /* Ensure divs with role="button" don't show focus outline by default */
+  outline: none;
 }
 
-/* Model option button */
+/* Hover state for segment retry button */
+.segment-retry-btn:hover {
+  background-color: rgba(var(--md-primary-rgb), 0.2);
+  box-shadow: 0 3px 5px rgba(0, 0, 0, 0.25);
+}
+
+/* Model option button - works for both button and div with role="button" */
 .model-option {
   display: flex;
   align-items: center;
@@ -319,10 +302,24 @@
   cursor: pointer;
   text-align: left;
   transition: background-color 0.2s ease;
+  /* Ensure divs with role="button" don't show focus outline by default */
+  outline: none;
 }
 
 .model-option:hover {
   background-color: var(--md-surface-3);
+}
+
+/* Focus styles for keyboard navigation */
+.model-option:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -2px;
+  background-color: var(--md-surface-3);
+}
+
+.segment-retry-btn:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
 }
 
 /* Model option icon */
@@ -383,6 +380,21 @@
   border: 1px solid rgb(0, 160, 0);
 }
 
+/* Custom Subtitles styles */
+.model-custom {
+  background-color: rgba(var(--md-secondary-rgb), 0.1);
+  color: var(--md-secondary);
+  border: 1px solid var(--md-secondary);
+}
+
+/* Divider for model options */
+.model-option-divider {
+  height: 1px;
+  background-color: var(--md-outline-variant);
+  margin: 8px 16px;
+  opacity: 0.7;
+}
+
 /* Active state for segment retry button */
 .segment-retry-btn:active {
   /* No transform to prevent layout shifts */
@@ -400,6 +412,33 @@
 /* Keep the active dropdown button above others */
 .active-dropdown-btn {
   z-index: 100000 !important; /* Higher than the dropdown */
+}
+
+/* View rules button */
+.view-rules-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background-color: rgba(var(--md-primary-rgb), 0.1);
+  color: var(--md-primary);
+  border: 1px solid var(--md-primary);
+  border-radius: 16px;
+  font-size: var(--md-label-small-size);
+  font-weight: var(--md-label-small-weight);
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+
+.view-rules-button:hover {
+  background-color: rgba(var(--md-primary-rgb), 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.view-rules-button:active {
+  transform: translateY(0);
+  background-color: rgba(var(--md-primary-rgb), 0.3);
 }
 
 /* Material Design 3 retrying indicator */
