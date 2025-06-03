@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 // Import utility modules
@@ -46,7 +46,20 @@ const TimelineVisualization = ({
   const timelineRef = useRef(null);
   const lastTimeRef = useRef(0);
   const animationFrameRef = useRef(null);
+  // Initialize currentZoomRef with the correct zoom level
   const currentZoomRef = useRef(zoom);
+
+  // Update currentZoomRef immediately when zoom prop changes
+  useEffect(() => {
+    // Ensure we respect the minimum zoom level
+    if (duration) {
+      const minZoom = calculateMinZoom(duration);
+      const effectiveZoom = Math.max(minZoom, zoom);
+      currentZoomRef.current = effectiveZoom;
+    } else {
+      currentZoomRef.current = zoom;
+    }
+  }, [zoom, duration]);
   const autoScrollRef = useRef(null);
   const isScrollingRef = useRef(false);
   const canvasWidthRef = useRef(0);
@@ -229,7 +242,7 @@ const TimelineVisualization = ({
       // Alt+S to toggle auto-scrolling
       if (e.altKey && e.key === 's') {
         disableAutoScroll.current = !disableAutoScroll.current;
-        console.log(`Auto-scrolling ${disableAutoScroll.current ? 'disabled' : 'enabled'}`);
+
 
         // Show a temporary message on the canvas
         const canvas = timelineRef.current;
@@ -299,7 +312,7 @@ const TimelineVisualization = ({
 
       isScrollingRef.current = true;
       debugCounter.current++;
-      console.log(`Auto-scroll triggered #${debugCounter.current}. Current time: ${currentTime}, Visible: ${visibleStart}-${visibleEnd}`);
+
 
       // Ensure we respect the minimum zoom level
       const minZoom = calculateMinZoom(timelineEnd);
@@ -330,7 +343,7 @@ const TimelineVisualization = ({
       // Release the scrolling lock immediately
       setTimeout(() => {
         isScrollingRef.current = false;
-        console.log('Auto-scroll completed');
+
       }, 50);
     }
 
@@ -372,6 +385,11 @@ const TimelineVisualization = ({
           visibleTimeRange={getTimeRange()}
           height={30}
         />
+      )}
+      {!videoSource && (
+        <div className="srt-only-timeline-message">
+          <span>{t('timeline.srtOnlyMode', 'SRT Only Mode - Timeline visualization based on subtitle timing')}</span>
+        </div>
       )}
       {showWaveformDisabledNotice && (
         <div className="waveform-disabled-notice">
