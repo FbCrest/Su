@@ -24,13 +24,19 @@ export const setupButtonObserver = (initCallback, observerInitialized) => {
             // Check if the node itself is a button with the relevant classes
             if (
               (node.classList &&
-               (node.classList.contains('generate-btn') || node.classList.contains('retry-gemini-btn') || node.classList.contains('force-stop-btn')))
+               (node.classList.contains('generate-btn') ||
+                node.classList.contains('retry-gemini-btn') ||
+                node.classList.contains('force-stop-btn') ||
+                node.classList.contains('cancel-download-btn') ||
+                node.classList.contains('add-subtitles-button') ||
+                node.classList.contains('srt-upload-button')) &&
+               !(node.classList.contains('translate-button') || node.classList.contains('download-btn')))
             ) {
               shouldReinitialize = true;
             }
 
-            // Check if the node contains buttons with the relevant classes
-            const buttons = node.querySelectorAll('.generate-btn, .retry-gemini-btn, .force-stop-btn');
+            // Check if the node contains buttons with the relevant classes (excluding translate and download buttons)
+            const buttons = node.querySelectorAll('.generate-btn:not(.translate-button):not(.download-btn), .retry-gemini-btn, .force-stop-btn, .cancel-download-btn, .add-subtitles-button, .srt-upload-button');
             if (buttons.length > 0) {
               shouldReinitialize = true;
             }
@@ -63,10 +69,8 @@ export const initializeButton = (button, initializedButtons, particles) => {
     button.dataset.geminiButtonId = `gemini-button-${Math.random().toString(36).substring(2, 11)}`;
   }
 
-  const buttonId = button.dataset.geminiButtonId;
-
   // Check if this button has already been initialized
-  const isInitialized = initializedButtons.has(buttonId);
+  const isInitialized = initializedButtons.has(button.dataset.geminiButtonId);
 
   // Check if the button already has a gemini-icon-container
   let iconContainer = button.querySelector('.gemini-icon-container');
@@ -110,7 +114,9 @@ export const initializeButton = (button, initializedButtons, particles) => {
   }
 
   // Create a collection of particles for this button - use a few particles for initial state
-  const initialCount = button.classList.contains('generate-btn') ? 10 : 4;
+  const initialCount = button.classList.contains('generate-btn') ? 10 :
+                      button.classList.contains('cancel-download-btn') ? 8 :
+                      button.classList.contains('add-subtitles-button') ? 6 : 4;
   const buttonParticles = createParticles(button, iconContainer, initialCount);
 
   // Make sure they're initially inactive/invisible
@@ -119,7 +125,7 @@ export const initializeButton = (button, initializedButtons, particles) => {
   });
 
   // Mark this button as initialized
-  initializedButtons.add(buttonId);
+  initializedButtons.add(button.dataset.geminiButtonId);
 
   return [...particles, ...buttonParticles];
 };
@@ -161,7 +167,6 @@ export const setupButtonEventListeners = (button, particles, cursorPosition, isH
     if (!button.disabled) {
       // Find all particles belonging to this button
       const iconContainer = button.querySelector('.gemini-icon-container');
-      const buttonId = button.dataset.geminiButtonId;
       const currentParticles = particles.filter(p => {
         return p.element.parentNode === iconContainer ||
                (p.element.parentNode && p.element.parentNode.parentNode === iconContainer);
@@ -179,7 +184,6 @@ export const setupButtonEventListeners = (button, particles, cursorPosition, isH
         particle.vx = Math.cos(angle) * speed;
         particle.vy = Math.sin(angle) * speed;
       });
-
     }
   });
 
