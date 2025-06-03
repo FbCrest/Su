@@ -1,7 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import '../styles/ParallelProcessingStatus.css';
-import { FiRefreshCw, FiStar, FiAward, FiZap, FiCpu, FiChevronDown } from 'react-icons/fi';
+import { FiRefreshCw, FiFileText } from 'react-icons/fi';
+import SegmentRetryModal from './SegmentRetryModal';
 
 /**
  * Component to display the status of parallel segment processing
@@ -13,118 +14,109 @@ import { FiRefreshCw, FiStar, FiAward, FiZap, FiCpu, FiChevronDown } from 'react
  * @param {Function} props.onRetryWithModel - Function to retry processing a segment with a specific model
  * @param {Function} props.onGenerateSegment - Function to generate a specific segment (for strong model)
  * @param {Array} props.retryingSegments - Array of segment indices that are currently being retried
+ * @param {Function} props.onViewRules - Function to open the transcription rules editor
+ * @param {string} props.userProvidedSubtitles - User-provided subtitles for the whole media
  * @returns {JSX.Element} - Rendered component
  */
-const ParallelProcessingStatus = ({ segments, overallStatus, statusType, onRetrySegment, onRetryWithModel, onGenerateSegment, retryingSegments = [] }) => {
+const ParallelProcessingStatus = ({
+  segments,
+  overallStatus,
+  statusType,
+  onRetrySegment,
+  onRetryWithModel,
+  onGenerateSegment,
+  retryingSegments = [],
+  onViewRules,
+  userProvidedSubtitles = ''
+ }) => {
   const { t } = useTranslation();
-  const [openDropdownIndex, setOpenDropdownIndex] = useState(null);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
-  const buttonRefs = useRef({});
 
-  // Calculate dropdown position when a button is clicked
-  const calculateDropdownPosition = (index) => {
-    if (buttonRefs.current[index]) {
-      const buttonRect = buttonRefs.current[index].getBoundingClientRect();
-      const dropdownHeight = 232; // Approximate height of dropdown (4 model options + header)
+  // Remove debug translation logs to prevent console spam
 
-      // Check if there's enough space above the button
-      const spaceAbove = buttonRect.top;
-      const spaceBelow = window.innerHeight - buttonRect.bottom;
+  const [rulesAvailable, setRulesAvailable] = useState(false);
+  const [showRetryModal, setShowRetryModal] = useState(false);
+  const [selectedSegmentIndex, setSelectedSegmentIndex] = useState(null);
 
-      let top;
-      if (spaceAbove >= dropdownHeight + 8 || spaceAbove > spaceBelow) {
-        // Position above if there's enough space or more space above than below
-        top = buttonRect.top - dropdownHeight - 8; // Position above with 8px gap
-      } else {
-        // Otherwise position below
-        top = buttonRect.bottom + 8;
-      }
-
-      const left = Math.max(buttonRect.left - 240, 10); // Align to left of button, but keep on screen
-
-      setDropdownPosition({ top, left });
-    }
-  };
-
-  // Toggle dropdown and calculate position
-  const toggleDropdown = (e, index) => {
-    e.stopPropagation();
-
-    if (openDropdownIndex === index) {
-      setOpenDropdownIndex(null);
-    } else {
-      calculateDropdownPosition(index);
-      setOpenDropdownIndex(index);
-    }
-  };
-
-  // Close dropdown when clicking outside and handle scroll/resize
-  React.useEffect(() => {
-    const handleClickOutside = (event) => {
-      // Check if the click is outside any dropdown
-      const dropdowns = document.querySelectorAll('.model-dropdown');
-      const buttons = document.querySelectorAll('.segment-retry-btn');
-      let clickedInsideDropdown = false;
-
-      dropdowns.forEach(dropdown => {
-        if (dropdown.contains(event.target)) {
-          clickedInsideDropdown = true;
-        }
-      });
-
-      buttons.forEach(button => {
-        if (button.contains(event.target)) {
-          clickedInsideDropdown = true;
-        }
-      });
-
-      if (!clickedInsideDropdown) {
-        setOpenDropdownIndex(null);
+  // Check if transcription rules are available
+  useEffect(() => {
+    const checkRulesAvailability = async () => {
+      try {
+        // Dynamically import to avoid circular dependencies
+        const { getTranscriptionRules } = await import('../utils/transcriptionRulesStore');
+        const rules = getTranscriptionRules();
+        setRulesAvailable(!!rules);
+      } catch (error) {
+        console.error('Error checking transcription rules availability:', error);
+        setRulesAvailable(false);
       }
     };
 
-    // Handle window resize
-    const handleResize = () => {
-      if (openDropdownIndex !== null) {
-        calculateDropdownPosition(openDropdownIndex);
-      }
-    };
+    checkRulesAvailability();
+  }, []);
 
-    // Handle window scroll
-    const handleScroll = () => {
-      if (openDropdownIndex !== null) {
-        // Recalculate dropdown position when scrolling
-        calculateDropdownPosition(openDropdownIndex);
-      }
-    };
-
-    document.addEventListener('click', handleClickOutside);
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('scroll', handleScroll);
-
-    return () => {
-      document.removeEventListener('click', handleClickOutside);
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('scroll', handleScroll);
-    };
-  }, [openDropdownIndex]);
+  // No need for click outside handler since we don't have a dropdown anymore
 
   if (!segments || segments.length === 0) {
     return (
       <div className={`status ${statusType}`}>
-        {overallStatus}
+        {/* Ensure the overall status is properly translated */}
+        {typeof overallStatus === 'string' ? (
+          overallStatus.includes('cache') ? t('output.subtitlesLoadedFromCache', 'Subtitles loaded from cache!') :
+          overallStatus.includes('Video segments ready') ? t('output.segmentsReady', 'Video segments are ready for processing!') :
+          overallStatus
+        ) : 'Processing...'}
       </div>
     );
   }
 
+  // Handle opening the retry modal
+  const handleOpenRetryModal = (index) => {
+    setSelectedSegmentIndex(index);
+    setShowRetryModal(true);
+  };
+
+  // Handle retry with custom subtitles
+  const handleRetryWithOptions = (segmentIndex, segments, options) => {
+    onRetrySegment(segmentIndex, segments, options);
+  };
+
   return (
-    <div className={`parallel-processing-container ${openDropdownIndex !== null ? 'model-dropdown-open' : ''}`}>
+    <div className="parallel-processing-container">
       <div className={`status ${statusType}`}>
-        {overallStatus}
+        {/* Ensure the overall status is properly translated */}
+        {typeof overallStatus === 'string' ? (
+          overallStatus.includes('cache') ? t('output.subtitlesLoadedFromCache', 'Subtitles loaded from cache!') :
+          overallStatus.includes('Video segments ready') ? t('output.segmentsReady', 'Video segments are ready for processing!') :
+          overallStatus
+        ) : 'Processing...'}
       </div>
 
+      {/* Segment Retry Modal */}
+      {showRetryModal && selectedSegmentIndex !== null && (
+        <SegmentRetryModal
+          isOpen={showRetryModal}
+          onClose={() => setShowRetryModal(false)}
+          segmentIndex={selectedSegmentIndex}
+          segments={segments}
+          onRetry={handleRetryWithOptions}
+          userProvidedSubtitles={userProvidedSubtitles}
+        />
+      )}
+
       <div className="segments-status">
-        <h4>{t('output.segmentsStatus', 'Segments Status')}</h4>
+        <div className="segments-status-header">
+          <h4>{t('output.segmentsStatus', 'Segments Status')}</h4>
+          {rulesAvailable && onViewRules && (
+            <button
+              className="view-rules-button"
+              onClick={onViewRules}
+              title={t('output.viewRules', 'View transcription rules')}
+            >
+              <FiFileText size={14} />
+              <span>{t('output.viewRules', 'View Rules')}</span>
+            </button>
+          )}
+        </div>
         <div className="segments-grid">
           {segments.map((segment, index) => (
             <div
@@ -135,7 +127,11 @@ const ParallelProcessingStatus = ({ segments, overallStatus, statusType, onRetry
               <span className="segment-number">{index + 1}</span>
               <span className="segment-indicator"></span>
               <div className="segment-info">
-                <span className="segment-message">{segment.shortMessage || segment.status}</span>
+                <span className="segment-message">
+                  {segment.status === 'overloaded'
+                    ? t('output.overloaded')
+                    : (segment.shortMessage || (typeof segment.status === 'string' ? t(`output.${segment.status}`, segment.status) : 'Unknown status'))}
+                </span>
                 {segment.timeRange && (
                   <span className="segment-time-range">{segment.timeRange}</span>
                 )}
@@ -146,7 +142,7 @@ const ParallelProcessingStatus = ({ segments, overallStatus, statusType, onRetry
                   className="segment-generate-btn"
                   onClick={(e) => {
                     e.stopPropagation();
-                    console.log('Generate button clicked for segment', index);
+
                     onGenerateSegment(index);
                   }}
                   title={t('output.generateSegmentTooltip', 'Process this segment')}
@@ -155,110 +151,27 @@ const ParallelProcessingStatus = ({ segments, overallStatus, statusType, onRetry
                 </button>
               )}
 
-              {/* Show retry button with dropdown for completed segments that aren't currently being retried */}
-              {(segment.status === 'success' || segment.status === 'error') && !retryingSegments.includes(index) && onRetryWithModel && (
+              {/* Show retry button for completed or overloaded segments that aren't currently being retried */}
+              {(segment.status === 'success' || segment.status === 'error' || segment.status === 'overloaded') && !retryingSegments.includes(index) && onRetryWithModel && (
                 <div className="model-retry-dropdown-container">
-                  {/* Retry button */}
-                  <button
-                    className={`segment-retry-btn ${openDropdownIndex === index ? 'active-dropdown-btn' : ''}`}
-                    onClick={(e) => toggleDropdown(e, index)}
-                    title={t('output.retryWithModel', 'Retry with different model')}
-                    ref={el => buttonRefs.current[index] = el}
+                  {/* Retry button - opens the modal directly */}
+                  <div
+                    className="segment-retry-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenRetryModal(index);
+                    }}
+                    title={t('output.retrySegment', 'Retry segment')}
+                    role="button"
+                    tabIndex="0"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        handleOpenRetryModal(index);
+                      }
+                    }}
                   >
                     <FiRefreshCw size={14} />
-                    <FiChevronDown size={10} className="dropdown-icon" />
-                  </button>
-
-                  {/* Model dropdown */}
-                  {openDropdownIndex === index && (
-                    <div
-                      className="model-dropdown"
-                      style={{
-                        top: `${dropdownPosition.top}px`,
-                        left: `${dropdownPosition.left}px`
-                      }}
-                    >
-                      <div className="model-dropdown-header">
-                        {t('output.selectModel', 'Select model for retry')}
-                      </div>
-
-                      {/* Gemini 2.5 Pro */}
-                      <button
-                        className="model-option"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          console.log('Retry with Gemini 2.5 Pro for segment', index);
-                          onRetryWithModel(index, 'gemini-2.5-pro-exp-03-25');
-                          setOpenDropdownIndex(null);
-                        }}
-                      >
-                        <div className="model-option-icon model-pro">
-                          <FiStar size={14} />
-                        </div>
-                        <div className="model-option-text">
-                          <div className="model-option-name">{t('models.gemini25Pro', 'Gemini 2.5 Pro')}</div>
-                          <div className="model-option-desc">{t('models.bestAccuracy', 'Best accuracy')}</div>
-                        </div>
-                      </button>
-
-                      {/* Gemini 2.0 Flash Thinking */}
-                      <button
-                        className="model-option"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          console.log('Retry with Gemini 2.0 Flash Thinking for segment', index);
-                          onRetryWithModel(index, 'gemini-2.0-flash-thinking-exp-01-21');
-                          setOpenDropdownIndex(null);
-                        }}
-                      >
-                        <div className="model-option-icon model-thinking">
-                          <FiAward size={14} />
-                        </div>
-                        <div className="model-option-text">
-                          <div className="model-option-name">{t('models.gemini20FlashThinking', 'Gemini 2.0 Flash Thinking')}</div>
-                          <div className="model-option-desc">{t('models.highAccuracy', 'High accuracy')}</div>
-                        </div>
-                      </button>
-
-                      {/* Gemini 2.0 Flash */}
-                      <button
-                        className="model-option"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          console.log('Retry with Gemini 2.0 Flash for segment', index);
-                          onRetryWithModel(index, 'gemini-2.0-flash');
-                          setOpenDropdownIndex(null);
-                        }}
-                      >
-                        <div className="model-option-icon model-flash">
-                          <FiZap size={14} />
-                        </div>
-                        <div className="model-option-text">
-                          <div className="model-option-name">{t('models.gemini20Flash', 'Gemini 2.0 Flash')}</div>
-                          <div className="model-option-desc">{t('models.balancedModel', 'Balanced')}</div>
-                        </div>
-                      </button>
-
-                      {/* Gemini 2.0 Flash Lite */}
-                      <button
-                        className="model-option"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          console.log('Retry with Gemini 2.0 Flash Lite for segment', index);
-                          onRetryWithModel(index, 'gemini-2.0-flash-lite');
-                          setOpenDropdownIndex(null);
-                        }}
-                      >
-                        <div className="model-option-icon model-lite">
-                          <FiCpu size={14} />
-                        </div>
-                        <div className="model-option-text">
-                          <div className="model-option-name">{t('models.gemini20FlashLite', 'Gemini 2.0 Flash Lite')}</div>
-                          <div className="model-option-desc">{t('models.fastestModel', 'Fastest')}</div>
-                        </div>
-                      </button>
-                    </div>
-                  )}
+                  </div>
                 </div>
               )}
 
