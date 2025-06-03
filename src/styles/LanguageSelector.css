@@ -47,30 +47,24 @@
   content: '';
   position: absolute;
   top: 0;
-  left: -50%;
-  width: 200%;
-  height: 100%;
-  background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transform: skewX(-20deg);
-  transition: transform 0.5s ease-in-out, opacity 0.5s ease-in-out;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: transparent;
+  transition: background-color var(--md-duration-medium2) var(--md-easing-standard);
   pointer-events: none;
+  border-radius: var(--md-shape-pill);
   z-index: 0;
-  border-radius: inherit;
-  opacity: 0;
 }
 
 .language-selector-button:hover::before {
-  transform: translateX(50%) skewX(-20deg);
-  opacity: 1;
+  background-color: color-mix(in srgb, var(--md-primary), transparent var(--md-state-hover-opacity));
 }
 
 .language-selector-button:hover {
   border-color: var(--md-primary);
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-  color: var(--md-primary); /* đổi màu chữ */
-  font-weight: 600; /* chữ đậm hơn */
-  text-shadow: 0 0 6px rgba(0, 0, 0, 0.1); /* thêm ánh sáng nhẹ */
+  transform: translateY(-2px);
+  box-shadow: var(--md-elevation-level1);
 }
 
 
