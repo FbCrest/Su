@@ -1554,8 +1554,11 @@ const SettingsModal = ({ onClose, onSave, apiKeysSet, setApiKeysSet }) => {
                     <strong>Email:</strong>
                     <a href="mailto:0rion24kk@gmail.com">
                       0rion24kk@gmail.com
-                    </a>
+                      </a>
                   </p>
+                </div>
+                <div className="app-description">
+                  <p>{t('settings.appDescription', 'One-click Subtitles Generator is a tool that helps you generate, edit, and translate subtitles for your videos with just one click.')}</p>
                 </div>
               </div>
             </div>
